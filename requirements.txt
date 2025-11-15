@@ -1,4 +1,5 @@
-python-telegram-bot==20.7
-reportlab==4.0.4
-Pillow==10.2.0
-python-dotenv==1.0.0
+python-telegram-bot
+reportlab
+Pillow
+python-dotenv
+
