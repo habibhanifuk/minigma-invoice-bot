@@ -826,7 +826,7 @@ async def list_premium_command(update: Update, context: ContextTypes.DEFAULT_TYP
     user_id = update.effective_user.id
     
     # ⚠️ REPLACE 123456789 WITH YOUR ACTUAL TELEGRAM ID ⚠️
-    ADMIN_ID = 123456789
+    ADMIN_ID = 334262726
     if user_id != ADMIN_ID:
         await update.message.reply_text("❌ Admin only command")
         return
@@ -3730,4 +3730,5 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
