@@ -7,6 +7,8 @@ import asyncio
 import sqlite3
 import io
 from datetime import datetime, timedelta
+from flask import Flask
+from threading import Thread
 
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, BotCommand
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
@@ -2315,10 +2317,30 @@ Need help? Contact support!
     """
     await update.message.reply_text(help_text)
 
+def create_health_check():
+    """Create a simple web server for health checks"""
+    app = Flask('')
+    
+    @app.route('/')
+    def home():
+        return "✅ Minigma Invoice Bot is running!"
+    
+    def run():
+        app.run(host='0.0.0.0', port=8000)
+    
+    t = Thread(target=run)
+    t.daemon = True
+    t.start()
+    print("✅ Health check server started on port 8000")
+
+
 def main():
     # Create necessary directories
     os.makedirs('logos', exist_ok=True)
     os.makedirs('invoices', exist_ok=True)
+    
+    # Start health check server FIRST  ← ADD THIS LINE
+    create_health_check()  # ← ADD THIS LINE
     
     # Create application
     application = Application.builder().token(BOT_TOKEN).build()
@@ -3708,3 +3730,4 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
