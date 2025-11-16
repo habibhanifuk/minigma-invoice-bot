@@ -33,7 +33,14 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-BOT_TOKEN = os.getenv('8287443004:AAHSbSxhT_SAMvn1EJBqnegmdnLZvezDpLQ')  # Railway will provide this
+BOT_TOKEN = os.getenv('BOT_TOKEN')  # Read from environment variable
+
+# Add this check to make sure token is set
+if not BOT_TOKEN:
+    print("❌ ERROR: BOT_TOKEN environment variable is not set!")
+    print("Please set the BOT_TOKEN environment variable in Koyeb")
+    exit(1)
+
 GRACE_PERIOD_DAYS = 14
 MONTHLY_INVOICE_LIMIT = 10
 
@@ -3699,4 +3706,5 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"Let's create a new invoice! 🧾{remaining_info}\n\n"
         "First, please enter the client name:"
+
     )
