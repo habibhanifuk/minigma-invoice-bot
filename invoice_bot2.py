@@ -24,6 +24,7 @@ from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
 
 from PIL import Image as PILImage
+from premium_manager import premium_manager
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -759,6 +760,25 @@ async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         f"🔍 **Your Telegram User ID:** `{user_id}`\n\n"
         "Provide this ID when contacting for premium access.",
+        parse_mode='Markdown'
+    )
+async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Debug command to check user ID and premium manager"""
+    user_id = update.effective_user.id
+    
+    # Test premium_manager access
+    try:
+        premium_count = len(premium_manager.premium_users)
+        premium_status = f"Premium users: {premium_count}"
+    except Exception as e:
+        premium_status = f"Premium manager error: {e}"
+    
+    await update.message.reply_text(
+        f"🔍 **Debug Info:**\n"
+        f"Your User ID: `{user_id}`\n"
+        f"Admin ID: `334262726`\n"
+        f"Admin Access: {'✅ YES' if user_id == 334262726 else '❌ NO'}\n"
+        f"{premium_status}",
         parse_mode='Markdown'
     )
 
@@ -2363,6 +2383,7 @@ def main():
     application.add_handler(CommandHandler("add_premium", add_premium_command))
     application.add_handler(CommandHandler("remove_premium", remove_premium_command))
     application.add_handler(CommandHandler("list_premium", list_premium_command))
+    application.add_handler(CommandHandler("debug", debug_command))
 
     # Photo handler for logos
     application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
@@ -3730,6 +3751,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
