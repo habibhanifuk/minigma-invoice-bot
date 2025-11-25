@@ -38,7 +38,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-TOKEN = "8287443004:AAHSbSxhT_SAMvn1EJBqnegmdnLZvezDpLQ"
+BOT_TOKEN = "8287443004:AAHSbSxhT_SAMvn1EJBqnegmdnLZvezDpLQ"
 
 # Add this check to make sure token is set
 if not BOT_TOKEN:
@@ -3846,6 +3846,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
