@@ -190,6 +190,29 @@ init_db()
 # PART 2: DATABASE HELPER FUNCTIONS
 # ==================================================
 
+# Date parsing function - MOVED TO TOP
+def parse_trial_end_date(trial_end_date_str):
+    if not trial_end_date_str:
+        return datetime.now()
+    
+    try:
+        formats = [
+            '%Y-%m-%d %H:%M:%S',
+            '%Y-%m-%d %H:%M:%S.%f',
+            '%Y-%m-%d'
+        ]
+        
+        for fmt in formats:
+            try:
+                return datetime.strptime(trial_end_date_str, fmt)
+            except ValueError:
+                continue
+        
+        return datetime.now()
+    except Exception as e:
+        logger.warning(f"Failed to parse trial end date '{trial_end_date_str}': {e}")
+        return datetime.now()
+
 # Database helper functions
 def get_user(user_id):
     conn = sqlite3.connect('invoices.db')
@@ -463,29 +486,6 @@ def add_premium_subscription(user_id, subscription_type, months=1):
     cursor.execute('UPDATE users SET subscription_tier = ? WHERE user_id = ?', ('premium', user_id))
     conn.commit()
     conn.close()
-
-# Date parsing function
-def parse_trial_end_date(trial_end_date_str):
-    if not trial_end_date_str:
-        return datetime.now()
-    
-    try:
-        formats = [
-            '%Y-%m-%d %H:%M:%S',
-            '%Y-%m-%d %H:%M:%S.%f',
-            '%Y-%m-%d'
-        ]
-        
-        for fmt in formats:
-            try:
-                return datetime.strptime(trial_end_date_str, fmt)
-            except ValueError:
-                continue
-        
-        return datetime.now()
-    except Exception as e:
-        logger.warning(f"Failed to parse trial end date '{trial_end_date_str}': {e}")
-        return datetime.now()
         # ==================================================
 # PART 3: INVOICE GENERATION AND PDF CREATION
 # ==================================================
@@ -3842,6 +3842,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
