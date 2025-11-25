@@ -89,6 +89,8 @@ def init_db():
             company_name TEXT,
             company_reg_number TEXT,
             vat_reg_number TEXT
+            trial_start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            trial_used BOOLEAN DEFAULT FALSE 
         )
     ''')
     
@@ -200,12 +202,16 @@ def get_user(user_id):
 def create_user(user_id, username, first_name, last_name):
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
-    trial_end_date = datetime.now() + timedelta(days=GRACE_PERIOD_DAYS)
+    
+    trial_end_date = datetime.now() + timedelta(days=14)
     trial_end_date_str = trial_end_date.strftime('%Y-%m-%d %H:%M:%S')
+    
     cursor.execute('''
-        INSERT OR REPLACE INTO users (user_id, username, first_name, last_name, trial_end_date)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT OR REPLACE INTO users 
+        (user_id, username, first_name, last_name, trial_end_date, trial_start_date, trial_used)
+        VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, TRUE)
     ''', (user_id, username, first_name, last_name, trial_end_date_str))
+    
     conn.commit()
     conn.close()
 
@@ -414,9 +420,34 @@ def get_client_by_name(user_id, client_name):
     return client
 
 def is_premium_user(user_id):
-    """Check if user has premium access - uses simple file system"""
-    from premium_manager import premium_manager
-    return premium_manager.is_premium(user_id)
+    """Check if user has premium access or active trial"""
+    # First check premium status
+    if premium_manager.is_premium(user_id):
+        return True
+    
+    # Check trial period
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT trial_end_date, trial_used FROM users WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if not result:
+        return False
+    
+    trial_end_date, trial_used = result
+    
+    # If user never started trial, they get one
+    if not trial_used:
+        return True
+    
+    # Check if trial has expired
+    if trial_end_date:
+        trial_end = parse_trial_end_date(trial_end_date)
+        if datetime.now() <= trial_end:
+            return True  # Still in trial period
+    
+    return False  # Trial expired
 
 def add_premium_subscription(user_id, subscription_type, months=1):
     conn = sqlite3.connect('invoices.db')
@@ -1022,6 +1053,43 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not get_user(user_id):
         create_user(user_id, user.username, user.first_name, user.last_name)
         await update.message.reply_text("✅ Your account has been created! Enjoy your 14-day free trial.")
+    
+    # Get real trial status
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT trial_end_date, trial_used FROM users WHERE user_id = ?', (user_id,))
+    result = cursor.fetchone()
+    conn.close()
+    
+    trial_info = ""
+    if result:
+        trial_end_date, trial_used = result
+        if trial_used and trial_end_date:
+            trial_end = parse_trial_end_date(trial_end_date)
+            days_left = (trial_end - datetime.now()).days
+            if days_left > 0:
+                trial_info = f"\n\n⏰ **Your free trial ends in {days_left} days**"
+            else:
+                trial_info = f"\n\n❌ **Your free trial has ended**"
+        elif not trial_used:
+            trial_info = f"\n\n🎉 **Your 14-day free trial starts now!**"
+    
+    welcome_message = f"""
+🤖 Welcome to Minigma Invoice Bot!{trial_info}
+
+✨ **Features during trial:**
+• All premium features unlocked
+• Unlimited invoices
+• Client database
+• Payment tracking
+
+💰 **After trial:** 10 invoices per month
+💎 **Premium:** Unlimited everything
+
+📝 **Try all commands during your trial!**
+    """
+    
+    await update.message.reply_text(welcome_message, parse_mode='Markdown')
     
     welcome_message = """
 🤖 Welcome to Minigma Invoice Bot!
@@ -3774,6 +3842,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
