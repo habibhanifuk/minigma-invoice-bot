@@ -88,7 +88,7 @@ def init_db():
             logo_path TEXT,
             company_name TEXT,
             company_reg_number TEXT,
-            vat_reg_number TEXT,  # <- ADDED MISSING COMMA HERE
+            vat_reg_number TEXT,
             trial_start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             trial_used BOOLEAN DEFAULT FALSE 
         )
@@ -3846,6 +3846,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
