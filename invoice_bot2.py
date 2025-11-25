@@ -1090,40 +1090,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
-    
-    welcome_message = """
-🤖 Welcome to Minigma Invoice Bot!
 
-✨ **Features:**
-• Upload company logo
-• Multiple currency support
-• Professional PDF invoices
-• 14-day free trial
-
-💰 **Premium Features:**
-• Company/VAT registration numbers
-• VAT calculation
-• Client database
-• Payment tracking
-• Email/SMS sending
-
-📝 **Commands:**
-/logo - Upload company logo
-/company - Set company name  
-/create - Create new invoice
-/myinvoices - View invoices
-/premium - Premium features
-/contact - Contact for premium
-/myid - Get your user ID
-/clients - Client database (Premium)
-/payments - Track payments (Premium)
-/setup - Company setup (Premium)
-/help - Get help
-
-You have 14 days to try all features for free!
-    """
-    
-    await update.message.reply_text(welcome_message)
 
 async def set_logo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
@@ -3842,6 +3809,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
