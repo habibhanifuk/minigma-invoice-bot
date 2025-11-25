@@ -88,7 +88,7 @@ def init_db():
             logo_path TEXT,
             company_name TEXT,
             company_reg_number TEXT,
-            vat_reg_number TEXT
+            vat_reg_number TEXT,  # <- ADDED MISSING COMMA HERE
             trial_start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             trial_used BOOLEAN DEFAULT FALSE 
         )
@@ -115,6 +115,10 @@ def init_db():
             FOREIGN KEY (user_id) REFERENCES users (user_id)
         )
     ''')
+    
+    conn.commit()
+    conn.close()
+    print("✅ Database initialization complete")
     
     # Invoice counters
     cursor.execute('''
@@ -3842,6 +3846,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
