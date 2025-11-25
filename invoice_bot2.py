@@ -59,8 +59,8 @@ async def setup_bot_commands(application):
         BotCommand("create", "Create new invoice"),
         BotCommand("myinvoices", "View my invoices"),
         BotCommand("premium", "Premium features"),
-        BotCommand("contact", "Contact for premium"),  # ← NEW
-        BotCommand("myid", "Get my user ID"),          # ← NEW
+        BotCommand("contact", "Contact for premium"),
+        BotCommand("myid", "Get my user ID"),
         BotCommand("clients", "Client database"),
         BotCommand("payments", "Track payments"),
         BotCommand("setup", "Company setup"),
@@ -70,12 +70,12 @@ async def setup_bot_commands(application):
     await application.bot.set_my_commands(commands)
     print("✅ Bot commands menu has been set up!")
 
-# Database setup
+# Database setup - CLEAN VERSION
 def init_db():
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     
-    # Users table - with all required columns
+    # Users table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY,
@@ -94,7 +94,7 @@ def init_db():
         )
     ''')
     
-    # Invoices table - COMPLETE schema
+    # Invoices table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS invoices (
             invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,7 +116,7 @@ def init_db():
         )
     ''')
     
-    # Invoice counters table (ONLY ONCE)
+    # Invoice counters table
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS invoice_counters (
             user_id INTEGER PRIMARY KEY,
@@ -152,7 +152,7 @@ def init_db():
         )
     ''')
     
-    # FIXED: COMPLETE column migration for invoices table
+    # Add missing columns to invoices table
     columns_to_add = [
         ('vat_enabled', 'BOOLEAN DEFAULT FALSE'),
         ('vat_amount', 'REAL DEFAULT 0'),
@@ -168,94 +168,7 @@ def init_db():
         except sqlite3.OperationalError:
             pass  # Column already exists
     
-    # FIXED: COMPLETE column migration for users table
-    user_columns_to_add = [
-        ('company_reg_number', 'TEXT'),
-        ('vat_reg_number', 'TEXT')
-    ]
-    
-    for column_name, column_type in user_columns_to_add:
-        try:
-            cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}")
-            print(f"✅ Added {column_name} column to users table")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-    
-    conn.commit()
-    conn.close()
-    print("✅ Database initialization complete")
-    
-    # FIXED: COMPLETE column migration for users table
-    user_columns_to_add = [
-        ('company_reg_number', 'TEXT'),
-        ('vat_reg_number', 'TEXT')
-    ]
-    
-    for column_name, column_type in user_columns_to_add:
-        try:
-            cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}")
-            print(f"✅ Added {column_name} column to users table")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-    
-    conn.commit()
-    conn.close()
-    print("✅ Database initialization complete")
-    
-    
-    # Invoice counters
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS invoice_counters (
-            user_id INTEGER PRIMARY KEY,
-            current_counter INTEGER DEFAULT 1,
-            last_reset_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (user_id)
-        )
-    ''')
-    
-    # Clients table
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS clients (
-            client_id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user_id INTEGER,
-            client_name TEXT,
-            email TEXT,
-            phone TEXT,
-            address TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (user_id) REFERENCES users (user_id)
-        )
-    ''')
-    
-    # Premium subscriptions
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS premium_subscriptions (
-            user_id INTEGER PRIMARY KEY,
-            subscription_type TEXT,
-            start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            end_date TIMESTAMP,
-            payment_method TEXT,
-            FOREIGN KEY (user_id) REFERENCES users (user_id)
-        )
-    ''')
-    
-    # FIXED: COMPLETE column migration for invoices table
-    columns_to_add = [
-        ('vat_enabled', 'BOOLEAN DEFAULT FALSE'),
-        ('vat_amount', 'REAL DEFAULT 0'),
-        ('client_email', 'TEXT'),
-        ('client_phone', 'TEXT'),
-        ('paid_status', 'BOOLEAN DEFAULT FALSE')  # ADDED: Missing paid_status column
-    ]
-    
-    for column_name, column_type in columns_to_add:
-        try:
-            cursor.execute(f"ALTER TABLE invoices ADD COLUMN {column_name} {column_type}")
-            print(f"✅ Added {column_name} column to invoices table")
-        except sqlite3.OperationalError:
-            pass  # Column already exists
-    
-    # FIXED: COMPLETE column migration for users table
+    # Add missing columns to users table
     user_columns_to_add = [
         ('company_reg_number', 'TEXT'),
         ('vat_reg_number', 'TEXT')
@@ -3929,6 +3842,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
