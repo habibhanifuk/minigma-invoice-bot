@@ -116,7 +116,7 @@ def init_db():
         )
     ''')
     
-    # Invoice counters table
+    # Invoice counters table (ONLY ONCE)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS invoice_counters (
             user_id INTEGER PRIMARY KEY,
@@ -167,6 +167,23 @@ def init_db():
             print(f"✅ Added {column_name} column to invoices table")
         except sqlite3.OperationalError:
             pass  # Column already exists
+    
+    # FIXED: COMPLETE column migration for users table
+    user_columns_to_add = [
+        ('company_reg_number', 'TEXT'),
+        ('vat_reg_number', 'TEXT')
+    ]
+    
+    for column_name, column_type in user_columns_to_add:
+        try:
+            cursor.execute(f"ALTER TABLE users ADD COLUMN {column_name} {column_type}")
+            print(f"✅ Added {column_name} column to users table")
+        except sqlite3.OperationalError:
+            pass  # Column already exists
+    
+    conn.commit()
+    conn.close()
+    print("✅ Database initialization complete")
     
     # FIXED: COMPLETE column migration for users table
     user_columns_to_add = [
@@ -3912,6 +3929,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
