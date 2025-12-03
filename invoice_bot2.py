@@ -3628,9 +3628,10 @@ welcome_message = f"""
 🚀 Start with 14-day premium trial of all features!
     """
     
-await update.message.reply_text(welcome_message)
+    await update.message.reply_text(welcome_message)
+# ← END of start function
 
-# Update database initialization to include document_type column
+# ← update_database_for_quotes starts here (no indentation)
 def update_database_for_quotes():
     """Add document_type column to invoices table for quote support"""
     conn = sqlite3.connect('invoices.db')
@@ -3786,6 +3787,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
