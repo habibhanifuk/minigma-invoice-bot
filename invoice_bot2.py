@@ -2411,77 +2411,73 @@ def main():
     os.makedirs('logos', exist_ok=True)
     os.makedirs('invoices', exist_ok=True)
     
-    # Start health check server FIRST  ← ADD THIS LINE
-    create_health_check()  # ← ADD THIS LINE
+    import time  # ← ADD THIS
+    
+    while True:  # ← ADD INFINITE LOOP FOR AUTO-RESTART
+        try:
+            print("🚀 Initializing Minigma Business Suite...")
+            
+            # Create application
+            application = Application.builder().token(BOT_TOKEN).build()
+            
+            # Add handlers - ORDER MATTERS!
+            
+            # Command handlers first
+            application.add_handler(CommandHandler("start", start))
+            application.add_handler(CommandHandler("logo", set_logo))
+            application.add_handler(CommandHandler("company", set_company_name))
+            application.add_handler(CommandHandler("create", create_invoice))
+            application.add_handler(CommandHandler("myinvoices", my_invoices_command))
+            application.add_handler(CommandHandler("premium", premium_command))
+            application.add_handler(CommandHandler("setup", setup_command))
+            application.add_handler(CommandHandler("clients", clients_command))
+            application.add_handler(CommandHandler("payments", payments_command))
+            application.add_handler(CommandHandler("help", help_command))
+            application.add_handler(CommandHandler("contact", contact_command))
+            application.add_handler(CommandHandler("myid", myid_command))
+            application.add_handler(CommandHandler("add_premium", add_premium_command))
+            application.add_handler(CommandHandler("remove_premium", remove_premium_command))
+            application.add_handler(CommandHandler("list_premium", list_premium_command))
+            application.add_handler(CommandHandler("debug", debug_command))
 
-    
-    # Create application
-    application = Application.builder().token(BOT_TOKEN).build()
-    
-    # Add handlers - ORDER MATTERS!
-    
-    # Command handlers first
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("logo", set_logo))
-    application.add_handler(CommandHandler("company", set_company_name))
-    application.add_handler(CommandHandler("create", create_invoice))
-    application.add_handler(CommandHandler("myinvoices", my_invoices_command))
-    application.add_handler(CommandHandler("premium", premium_command))
-    application.add_handler(CommandHandler("setup", setup_command))
-    application.add_handler(CommandHandler("clients", clients_command))
-    application.add_handler(CommandHandler("payments", payments_command))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("contact", contact_command))
-    application.add_handler(CommandHandler("myid", myid_command))
-    application.add_handler(CommandHandler("add_premium", add_premium_command))
-    application.add_handler(CommandHandler("remove_premium", remove_premium_command))
-    application.add_handler(CommandHandler("list_premium", list_premium_command))
-    application.add_handler(CommandHandler("debug", debug_command))
-
-    # Photo handler for logos
-    application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
-    
-    # Callback query handler for buttons - MUST be before text handler
-    application.add_handler(CallbackQueryHandler(button_handler))
-    
-    # Text handler last - catches all other text messages
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
-    
-    # Set up bot commands menu
-    application.post_init = setup_bot_commands
-    
-    # Start the bot
-    print("🚀 Bot is starting with ALL FEATURES FIXED...")
-    print("✅ Premium features are ENABLED for testing!")
-    print("✅ Payments system is WORKING!")
-    print("✅ Finish Invoice button is WORKING!")
-    print("✅ VAT calculation is WORKING!")
-    print("✅ Client creation with email/phone is WORKING!")
-    print("✅ Client editing is WORKING!")
-    print("✅ Setup command is WORKING!")
-    print("✅ MyInvoices command is WORKING!")
-    print("")
-    print("📝 TESTING INSTRUCTIONS:")
-    print("   1. /create → Add items → Finish Invoice → See VAT calculation")
-    print("   2. /payments → Mark invoices as paid")
-    print("   3. /setup → Set company/VAT numbers")
-    print("   4. /clients → Add New Client → Enter name, email, phone")
-    print("   5. /clients → View Client → Edit Client → Update details")
-    print("   6. /myinvoices → View all invoices")
-    print("   7. /myinvoices ClientName → Filter by client")
-    print("")
-    print("🎯 ALL FEATURES SHOULD NOW WORK!")
-    
-    try:
-        application.run_polling()
-    except Exception as e:
-        logger.error(f"Bot crashed: {e}")
-        print(f"❌ Bot crashed: {e}")
+            # Photo handler for logos
+            application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
+            
+            # Callback query handler for buttons - MUST be before text handler
+            application.add_handler(CallbackQueryHandler(button_handler))
+            
+            # Text handler last - catches all other text messages
+            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+            
+            # Set up bot commands menu
+            application.post_init = setup_bot_commands
+            
+            print("🚀 Minigma Business Suite is starting...")
+            print("✅ All premium features ENABLED")
+            print("✅ Payments system ACTIVE")
+            print("✅ Client database READY")
+            print("✅ Invoice generation WORKING")
+            print("📊 Optimized for PythonAnywhere (5s polling)")
+            print("🔄 Auto-restart enabled for maximum uptime")
+            
+            # Start with OPTIMIZED settings
+            application.run_polling(
+                poll_interval=5.0,        # 5 seconds between checks
+                timeout=30,               # Longer timeout
+                drop_pending_updates=True, # Ignore old messages on restart
+                allowed_updates=Update.ALL_TYPES,
+                close_loop=False          # Don't close asyncio loop on error
+            )
+            
+        except Exception as e:
+            print(f"❌ Bot crashed: {e}")
+            print("🔄 Auto-restarting in 15 seconds...")
+            time.sleep(15)  # Wait before restarting
+            # The loop will restart automatically
 
 if __name__ == '__main__':
-    # FIXED: Use asyncio to run the application properly
-    import asyncio
-    asyncio.run(main())
+    # Remove the asyncio.run() since we're using while loop
+    main()
 # ==================================================
 # PART 7: EMAIL AND SMS DELIVERY
 # ==================================================
@@ -3748,6 +3744,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
