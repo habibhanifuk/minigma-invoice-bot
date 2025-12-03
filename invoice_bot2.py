@@ -53,18 +53,18 @@ MONTHLY_INVOICE_LIMIT = 10
 async def setup_bot_commands(application):  
     """Set up the bot commands menu"""
     commands = [
-        BotCommand("start", "Start the bot"),
-        BotCommand("logo", "Upload company logo"),
-        BotCommand("company", "Set company name"),
-        BotCommand("create", "Create new invoice"),
-        BotCommand("myinvoices", "View my invoices"),
-        BotCommand("premium", "Premium features"),
-        BotCommand("contact", "Contact for premium"),
-        BotCommand("myid", "Get my user ID"),
-        BotCommand("clients", "Client database"),
-        BotCommand("payments", "Track payments"),
-        BotCommand("setup", "Company setup"),
-        BotCommand("help", "Get help")
+    BotCommand("start", "🏢 Launch Business Suite"),
+    BotCommand("logo", "🏢 Set company branding"),
+    BotCommand("company", "📛 Configure business name"),
+    BotCommand("create", "🧾 Generate new invoice"),
+    BotCommand("myinvoices", "📋 View invoice history"),
+    BotCommand("premium", "💎 Upgrade to Premium Suite"),
+    BotCommand("contact", "📞 Contact sales/support"),
+    BotCommand("myid", "🔑 Get account ID"),
+    BotCommand("clients", "👥 Manage clients"),
+    BotCommand("payments", "💰 Payment tracking"),
+    BotCommand("setup", "⚙️ Business configuration"),
+    BotCommand("help", "❓ Help & support")
     ]
     
     await application.bot.set_my_commands(commands)
@@ -1189,7 +1189,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 🤖 Minigma Business Suite - Help
 
 📝 **Basic Commands:**
-/start - Start the bot
+/start - 🏢 Launch Minigma Business Suite
 /logo - Upload company logo
 /company - Set company name
 /create - Create new invoice
@@ -3744,6 +3744,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
