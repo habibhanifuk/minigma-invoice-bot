@@ -38,7 +38,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Bot configuration
-BOT_TOKEN = "8287443004:AAHSbSxhT_SAMvn1EJBqnegmdnLZvezDpLQ"
+BOT_TOKEN = "8244318007:AAF1h90xrkbav-R0FHM68UxWYtN427EiTEI"
 
 # Add this check to make sure token is set
 if not BOT_TOKEN:
@@ -3413,8 +3413,8 @@ async def handle_premium_payment(query, user_id, plan_type):
             amount = TIER_LIMITS['premium']['annual_price']
         
         # Create checkout session
-        success_url = f"https://t.me/your_bot_username?start=payment_success"
-        cancel_url = f"https://t.me/your_bot_username?start=payment_cancel"
+        success_url = f"https://t.me/MinigmaSuiteBot?start=payment_success"
+        cancel_url = f"https://t.me/MinigmaSuiteBot?start=payment_cancel"
         
         checkout_url = create_stripe_checkout_session(user_id, price_id, success_url, cancel_url)
         
@@ -3734,6 +3734,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
