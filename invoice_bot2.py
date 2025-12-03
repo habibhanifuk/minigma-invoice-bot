@@ -1074,7 +1074,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif not trial_used:
             trial_info = f"\n\n🎉 **Your 14-day free trial starts now!**"
     
-welcome_message = f"""
+    welcome_message = f"""
 🏢 **Welcome to Minigma Business Suite!**{trial_info}
 
 ✨ **All Premium Features Unlocked During Trial:**
@@ -1105,7 +1105,7 @@ welcome_message = f"""
 
 💡 **Quick Start:** Use /create for invoices, /clients for database, /payments for tracking
 """
-
+    
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
 
 async def set_logo(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -3748,6 +3748,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
