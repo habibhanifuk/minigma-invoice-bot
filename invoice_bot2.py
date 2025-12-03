@@ -1074,21 +1074,37 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif not trial_used:
             trial_info = f"\n\n🎉 **Your 14-day free trial starts now!**"
     
-    welcome_message = f"""
-🏢 Welcome to Minigma Business Suite!{trial_info}
+welcome_message = f"""
+🏢 **Welcome to Minigma Business Suite!**{trial_info}
 
-✨ **All Premium Features During Trial:**
-• Unlimited invoices & quotes
-• Client database management
+✨ **All Premium Features Unlocked During Trial:**
+
+📄 **Invoice & Quote Management**
+• Unlimited professional invoices
+• Automated quote generation  
+• Multi-currency support
+• VAT calculation (where applicable)
+
+👥 **Client & Payment Tools**
+• Complete client database
 • Payment tracking & reconciliation
-• Company/VAT registration
-• Advanced reporting
+• Automated payment reminders
+• Client communication history
 
-💰 **After Trial:** Business Lite (10 invoices/month)
-💎 **Premium Suite:** Unlimited everything + priority support
+🏢 **Business Operations**
+• Company/VAT registration setup
+• Professional PDF generation
+• Advanced reporting dashboard
+• Custom branding options
 
-🚀 **Explore all business tools during your trial!**
-    """
+📊 **After Trial Period:**
+• **Business Lite:** 10 invoices/month (free)
+• **Premium Suite:** Unlimited everything + priority support
+
+🚀 **Your trial gives full access to test all premium tools!**
+
+💡 **Quick Start:** Use /create for invoices, /clients for database, /payments for tracking
+"""
 
     await update.message.reply_text(welcome_message, parse_mode='Markdown')
 # ← THIS LINE should be END of start function
@@ -3734,6 +3750,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
