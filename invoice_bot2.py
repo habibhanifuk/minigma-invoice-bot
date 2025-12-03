@@ -1074,7 +1074,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif not trial_used:
             trial_info = f"\n\n🎉 **Your 14-day free trial starts now!**"
     
-welcome_message = f"""
+    welcome_message = f"""
 🏢 Welcome to Minigma Business Suite!{trial_info}
 
 ✨ **All Premium Features During Trial:**
@@ -1090,9 +1090,10 @@ welcome_message = f"""
 🚀 **Explore all business tools during your trial!**
     """
 
-await update.message.reply_text(welcome_message, parse_mode='Markdown')
+    await update.message.reply_text(welcome_message, parse_mode='Markdown')
+# ← THIS LINE should be END of start function
 
-
+# ← set_logo function should start HERE (no indentation)
 async def set_logo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Please upload your company logo as a photo. "
@@ -3785,6 +3786,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
