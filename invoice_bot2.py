@@ -3627,7 +3627,7 @@ welcome_message = f"""
 🚀 Start with 14-day premium trial of all features!
     """
     
-    await update.message.reply_text(welcome_message)
+await update.message.reply_text(welcome_message)
 
 # Update database initialization to include document_type column
 def update_database_for_quotes():
@@ -3785,6 +3785,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
