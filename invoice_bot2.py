@@ -2390,26 +2390,6 @@ def create_health_check():
     t.start()
     print("✅ Health check server started on port 8000")
 
-def keep_alive_ping():
-    """Ping the service every 10 minutes to prevent sleeping"""
-    def ping():
-        while True:
-            try:
-                # Ping your own Koyeb URL
-                your_koyeb_url = "https://sorry-hyacinthia-minigma-36894125.koyeb.app"
-                response = requests.get(your_koyeb_url, timeout=10)
-                print(f"✅ Keep-alive ping sent: {response.status_code}")
-            except Exception as e:
-                print(f"❌ Keep-alive ping failed: {e}")
-            
-            # Wait 10 minutes before next ping
-            time.sleep(600)
-    
-    t = Thread(target=ping)
-    t.daemon = True
-    t.start()
-    print("✅ Keep-alive service started")
-
 def main():
     # Create necessary directories
     os.makedirs('logos', exist_ok=True)
@@ -2418,7 +2398,6 @@ def main():
     # Start health check server FIRST  ← ADD THIS LINE
     create_health_check()  # ← ADD THIS LINE
 
-    keep_alive_ping()
     
     # Create application
     application = Application.builder().token(BOT_TOKEN).build()
@@ -3809,6 +3788,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
