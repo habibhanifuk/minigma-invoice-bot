@@ -1106,7 +1106,7 @@ welcome_message = f"""
 💡 **Quick Start:** Use /create for invoices, /clients for database, /payments for tracking
 """
 
-    await update.message.reply_text(welcome_message, parse_mode='Markdown')
+await update.message.reply_text(welcome_message, parse_mode='Markdown')
 # ← THIS LINE should be END of start function
 
 # ← set_logo function should start HERE (no indentation)
@@ -3750,6 +3750,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
