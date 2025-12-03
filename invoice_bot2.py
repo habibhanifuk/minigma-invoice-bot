@@ -3443,7 +3443,7 @@ async def handle_premium_payment(query, user_id, plan_type):
             await query.edit_message_text(
                 "❌ **Payment System Unavailable**\n\n"
                 "Our payment system is currently undergoing maintenance.\n\n"
-                "Please try again later or contact support for manual activation.",
+                "Please try again later or contact support for manual activation",
                 parse_mode='Markdown'
             )
 
@@ -3578,60 +3578,7 @@ async def payments_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-# Update the start command to show tier information
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    user_id = user.id
-    
-    if not get_user(user_id):
-        create_user(user_id, user.username, user.first_name, user.last_name)
-        await update.message.reply_text("✅ Your account has been created! Enjoy your 14-day free trial.")
-    
-    current_tier = get_user_tier(user_id)
-    remaining_invoices = get_remaining_invoices(user_id)
-    
-    tier_info = ""
-    if current_tier == 'premium':
-        tier_info = "🎉 **You have Premium access!**"
-    else:
-        tier_info = f"📊 **Free Tier:** {remaining_invoices} creations remaining this month"
-    
-welcome_message = f"""
-🏢 Welcome to Minigma Business Suite!
-
-{tier_info}
-
-✨ **Business Lite (Free):**
-• Professional invoice & quote creation
-• Multi-currency PDF generation
-• Basic client management
-• 14-day premium trial
-
-💎 **Premium Suite (£12/month):**
-• Unlimited invoices, quotes & clients
-• Company/VAT registration setup
-• Payment tracking & reconciliation
-• Advanced business reporting
-• Email/SMS invoice delivery
-• Priority support
-
-📊 **Core Commands:**
-/suite - Main dashboard
-/invoice - Invoice management
-/clients - Client database
-/payments - Payment tracking
-/quotes - Quote creation
-/reports - Business reports
-/premium - Upgrade options
-/help - Get assistance
-
-🚀 Start with 14-day premium trial of all features!
-    """
-    
-    await update.message.reply_text(welcome_message)
-# ← END of start function
-
-# ← update_database_for_quotes starts here (no indentation)
+# Update database initialization to include document_type column
 def update_database_for_quotes():
     """Add document_type column to invoices table for quote support"""
     conn = sqlite3.connect('invoices.db')
@@ -3787,6 +3734,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
