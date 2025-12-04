@@ -152,6 +152,68 @@ def init_db():
         )
     ''')
     
+    # ===== APPOINTMENT TABLES =====
+    # Appointments table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS appointments (
+            appointment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            client_id INTEGER,
+            title TEXT,
+            description TEXT,
+            appointment_date TIMESTAMP,
+            duration_minutes INTEGER DEFAULT 60,
+            appointment_type TEXT DEFAULT 'meeting',
+            status TEXT DEFAULT 'scheduled',
+            reminder_sent BOOLEAN DEFAULT FALSE,
+            google_calendar_id TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            FOREIGN KEY (client_id) REFERENCES clients (client_id)
+        )
+    ''')
+    
+    # Appointment types table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS appointment_types (
+            type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            type_name TEXT,
+            color_hex TEXT DEFAULT '#4a6ee0',
+            duration_minutes INTEGER DEFAULT 60,
+            price DECIMAL(10,2) DEFAULT 0.00,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Default appointment types for new users
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS default_appointment_types (
+            type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type_name TEXT,
+            duration_minutes INTEGER DEFAULT 60,
+            description TEXT
+        )
+    ''')
+    
+    # Insert default appointment types if table is empty
+    cursor.execute('SELECT COUNT(*) FROM default_appointment_types')
+    if cursor.fetchone()[0] == 0:
+        default_types = [
+            ('Consultation', 60, 'Initial client consultation'),
+            ('Follow-up', 30, 'Follow-up meeting'),
+            ('Delivery', 15, 'Product/service delivery'),
+            ('Payment', 15, 'Payment collection'),
+            ('Support', 45, 'Technical support'),
+            ('Planning', 90, 'Project planning session')
+        ]
+        
+        for type_name, duration, description in default_types:
+            cursor.execute('''
+                INSERT INTO default_appointment_types (type_name, duration_minutes, description)
+                VALUES (?, ?, ?)
+            ''', (type_name, duration, description))
+    
     # Add missing columns to invoices table
     columns_to_add = [
         ('vat_enabled', 'BOOLEAN DEFAULT FALSE'),
@@ -183,7 +245,7 @@ def init_db():
     
     conn.commit()
     conn.close()
-    print("✅ Database initialization complete")
+    print("✅ Database initialization complete with appointment system")
 
 init_db()
 # ==================================================
@@ -3744,6 +3806,7 @@ async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "First, please enter the client name:"
 
     )
+
 
 
 
