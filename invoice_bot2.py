@@ -5854,10 +5854,10 @@ def main():
             print("🚀 Initializing Minigma Business Suite v2.0...")
             print("📅 Comprehensive Appointment Scheduling System")
             
-# Create application
-application = Application.builder().token(BOT_TOKEN).build()
-
-# ===== ADD SCHEDULING COMMAND HANDLERS =====
+            # Create application - THIS LINE MUST BE INSIDE THE TRY BLOCK!
+            application = Application.builder().token(BOT_TOKEN).build()
+            
+            # ===== ADD SCHEDULING COMMAND HANDLERS =====
 application.add_handler(CommandHandler("schedule", schedule_command))
 application.add_handler(CommandHandler("calendar", calendar_command))
 application.add_handler(CommandHandler("quickbook", quickbook_command))
@@ -9677,6 +9677,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
