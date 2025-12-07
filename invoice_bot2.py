@@ -5847,184 +5847,69 @@ def main():
     os.makedirs('appointments', exist_ok=True)
     os.makedirs('calendar_exports', exist_ok=True)
     
-import time
-
-while True:  # Infinite loop for auto-restart
-    try:
-        print("🚀 Initializing Minigma Business Suite v2.0...")
-        print("📅 Comprehensive Appointment Scheduling System")
-        
-        # Create application - THIS LINE MUST BE INSIDE THE TRY BLOCK!
-        application = Application.builder().token(BOT_TOKEN).build()
-        
-        # ===== ADD SCHEDULING COMMAND HANDLERS =====
-        application.add_handler(CommandHandler("schedule", schedule_command))
-        application.add_handler(CommandHandler("calendar", calendar_command))
-        application.add_handler(CommandHandler("quickbook", quickbook_command))
-        application.add_handler(CommandHandler("appointments", appointments_command))
-        application.add_handler(CommandHandler("today", today_command))
-        application.add_handler(CommandHandler("week", week_command))
-        application.add_handler(CommandHandler("remind", remind_command))
-        application.add_handler(CommandHandler("reschedule", reschedule_command))
-        application.add_handler(CommandHandler("cancel", cancel_command))
-        application.add_handler(CommandHandler("settings", settings_command))
-
-# ===== ADD SCHEDULING CALLBACK HANDLERS =====
-# These handle button clicks for scheduling features
-application.add_handler(CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"))
-application.add_handler(CallbackQueryHandler(handle_appointment_buttons, pattern="^book_|^view_|^toggle_|^schedule_"))
-application.add_handler(CallbackQueryHandler(handle_booking_flow, pattern="^book_type_|^book_client_|^booking_|^select_"))
-application.add_handler(CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_|^week_|^month_|^today_"))
-application.add_handler(CallbackQueryHandler(view_appointment_details, pattern="^view_appt_"))
-application.add_handler(CallbackQueryHandler(toggle_appointment_reminder, pattern="^toggle_reminder_"))
-
-# Quick appointment booking callbacks
-application.add_handler(CallbackQueryHandler(handle_quick_booking, pattern="^quick_"))
-
-# Appointment management callbacks
-application.add_handler(CallbackQueryHandler(handle_appointment_actions, pattern="^reschedule_|^cancel_|^reminders_|^notes_"))
-
-# ===== ADD EXISTING COMMAND HANDLERS =====
-application.add_handler(CommandHandler("start", start))
-application.add_handler(CommandHandler("logo", set_logo))
-application.add_handler(CommandHandler("company", set_company_name))
-application.add_handler(CommandHandler("create", create_invoice))
-application.add_handler(CommandHandler("myinvoices", my_invoices_command))
-application.add_handler(CommandHandler("premium", premium_command))
-application.add_handler(CommandHandler("setup", setup_command))
-application.add_handler(CommandHandler("clients", clients_command))
-application.add_handler(CommandHandler("payments", payments_command))
-application.add_handler(CommandHandler("help", help_command))
-application.add_handler(CommandHandler("contact", contact_command))
-application.add_handler(CommandHandler("myid", myid_command))
-application.add_handler(CommandHandler("add_premium", add_premium_command))
-application.add_handler(CommandHandler("remove_premium", remove_premium_command))
-application.add_handler(CommandHandler("list_premium", list_premium_command))
-application.add_handler(CommandHandler("debug", debug_command))
-
-# ===== ADD MEDIA HANDLERS =====
-application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name))
-
-# ===== ADD INVOICE CREATION HANDLERS =====
-# (Your existing invoice handlers here)
-
-# ===== ADD CONVERSATION HANDLERS FOR SCHEDULING =====
-# Schedule conversation handler
-schedule_conv = ConversationHandler(
-    entry_points=[CommandHandler("schedule", schedule_command)],
-    states={
-        SCHEDULE_START: [
-            CallbackQueryHandler(schedule_add_client_handler, pattern="^schedule_add_client$"),
-            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-        ],
-        SELECT_CLIENT: [
-            CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"),
-            CallbackQueryHandler(schedule_new_client_handler, pattern="^schedule_new_client$"),
-            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-        ],
-        SELECT_TYPE: [
-            CallbackQueryHandler(appointment_type_handler, pattern="^appointment_type_"),
-            CallbackQueryHandler(appointment_custom_type_handler, pattern="^appointment_custom_type$"),
-            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$"),
-            CallbackQueryHandler(handle_booking_flow, pattern="^book_type_")  # Added
-        ],
-        SELECT_DATE: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_appointment_creation),
-            CallbackQueryHandler(appointment_change_date_handler, pattern="^appointment_change_date$"),
-            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$"),
-            CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_select_")  # Added
-        ],
-        SELECT_TIME: [
-            CallbackQueryHandler(appointment_time_handler, pattern="^appointment_time_"),
-            CallbackQueryHandler(appointment_change_date_handler, pattern="^appointment_change_date$"),
-            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$"),
-            CallbackQueryHandler(handle_booking_flow, pattern="^select_time_")  # Added
-        ],
-        ADD_DESCRIPTION: [
-            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_appointment_creation),
-            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-        ],
-        CONFIRM_APPOINTMENT: [
-            CallbackQueryHandler(appointment_confirm_save_handler, pattern="^appointment_confirm_save$"),
-            CallbackQueryHandler(appointment_edit_handler, pattern="^appointment_edit$"),
-            CallbackQueryHandler(appointment_change_datetime_handler, pattern="^appointment_change_datetime$"),
-            CallbackQueryHandler(appointment_change_client_handler, pattern="^appointment_change_client$"),
-            CallbackQueryHandler(appointment_send_email_handler, pattern="^appointment_send_email$"),
-            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-        ]
-    },
-    fallbacks=[CommandHandler("cancel", cancel_command)],
-    allow_reentry=True
-)
-
-application.add_handler(schedule_conv)
-
-# ===== ADD OTHER CONVERSATION HANDLERS =====
-# (Your existing conversation handlers for invoices, etc.)
-
-# ===== ADD UNHANDLED MESSAGE HANDLER =====
-application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_unrecognized_message))
+    while True:  # Infinite loop for auto-restart
+        try:
+            print("🚀 Initializing Minigma Business Suite v2.0...")
+            print("📅 Comprehensive Appointment Scheduling System")
             
-            # ===== ADD OTHER HANDLERS =====
-            # Photo handler for logos
+            # Create application
+            application = Application.builder().token(BOT_TOKEN).build()
+            
+            # ===== ADD SCHEDULING COMMAND HANDLERS =====
+            application.add_handler(CommandHandler("schedule", schedule_command))
+            application.add_handler(CommandHandler("calendar", calendar_command))
+            application.add_handler(CommandHandler("quickbook", quickbook_command))
+            application.add_handler(CommandHandler("appointments", appointments_command))
+            application.add_handler(CommandHandler("today", today_command))
+            application.add_handler(CommandHandler("week", week_command))
+            application.add_handler(CommandHandler("remind", remind_command))
+            application.add_handler(CommandHandler("reschedule", reschedule_command))
+            application.add_handler(CommandHandler("cancel", cancel_command))
+            application.add_handler(CommandHandler("settings", settings_command))
+
+            # ===== ADD SCHEDULING CALLBACK HANDLERS =====
+            application.add_handler(CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"))
+            application.add_handler(CallbackQueryHandler(handle_appointment_buttons, pattern="^book_|^view_|^toggle_|^schedule_"))
+            application.add_handler(CallbackQueryHandler(handle_booking_flow, pattern="^book_type_|^book_client_|^booking_|^select_"))
+            application.add_handler(CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_|^week_|^month_|^today_"))
+            application.add_handler(CallbackQueryHandler(view_appointment_details, pattern="^view_appt_"))
+            application.add_handler(CallbackQueryHandler(toggle_appointment_reminder, pattern="^toggle_reminder_"))
+
+            # ===== ADD EXISTING COMMAND HANDLERS =====
+            application.add_handler(CommandHandler("start", start))
+            application.add_handler(CommandHandler("logo", set_logo))
+            application.add_handler(CommandHandler("company", set_company_name))
+            application.add_handler(CommandHandler("create", create_invoice))
+            application.add_handler(CommandHandler("myinvoices", my_invoices_command))
+            application.add_handler(CommandHandler("premium", premium_command))
+            application.add_handler(CommandHandler("setup", setup_command))
+            application.add_handler(CommandHandler("clients", clients_command))
+            application.add_handler(CommandHandler("payments", payments_command))
+            application.add_handler(CommandHandler("help", help_command))
+            application.add_handler(CommandHandler("contact", contact_command))
+            application.add_handler(CommandHandler("myid", myid_command))
+            application.add_handler(CommandHandler("add_premium", add_premium_command))
+            application.add_handler(CommandHandler("remove_premium", remove_premium_command))
+            application.add_handler(CommandHandler("list_premium", list_premium_command))
+            application.add_handler(CommandHandler("debug", debug_command))
+
+            # ===== ADD MEDIA HANDLERS =====
             application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
+            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name))
+
+            print("✅ Bot initialized successfully!")
+            print("🤖 Minigma Business Suite is running...")
+            print("🔄 Press Ctrl+C to stop")
             
-            # Callback query handler for buttons - MUST be before text handler
-            application.add_handler(CallbackQueryHandler(button_handler))
-            
-            # Text handler last - catches all other text messages
-            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
-            
-            # ===== SET UP SCHEDULED JOBS =====
-            # Send appointment reminders every 5 minutes
-            job_queue = application.job_queue
-            if job_queue:
-                job_queue.run_repeating(send_scheduled_reminders, interval=300, first=10)  # 5 minutes
-                job_queue.run_repeating(check_overdue_appointments, interval=3600, first=30)  # 1 hour
-                job_queue.run_daily(send_daily_schedule, time=time(hour=8, minute=0, second=0))  # 8 AM daily
-                
-                print("✅ Scheduled jobs configured:")
-                print("   • Appointment reminders: every 5 minutes")
-                print("   • Overdue appointments: every hour")
-                print("   • Daily schedules: 8:00 AM daily")
-            
-            # Set up bot commands menu
-            application.post_init = setup_bot_commands
-            
-            # Start health check server
-            create_health_check()
-            
-            print("=" * 60)
-            print("🚀 Minigma Business Suite v2.0 STARTING...")
-            print("=" * 60)
-            print("✅ All premium features ENABLED")
-            print("✅ Payments system ACTIVE")
-            print("✅ Client database READY")
-            print("✅ Invoice generation WORKING")
-            print("✅ Appointment scheduling LIVE")
-            print("✅ Calendar management ACTIVE")
-            print("✅ Automated reminders CONFIGURED")
-            print("✅ Email notifications READY")
-            print("📊 Optimized for PythonAnywhere (5s polling)")
-            print("🔄 Auto-restart enabled for maximum uptime")
-            print("=" * 60)
-            
-            # Start with OPTIMIZED settings
-            application.run_polling(
-                poll_interval=5.0,        # 5 seconds between checks
-                timeout=30,               # Longer timeout
-                drop_pending_updates=True, # Ignore old messages on restart
-                allowed_updates=Update.ALL_TYPES,
-                close_loop=False          # Don't close asyncio loop on error
-            )
+            application.run_polling(allowed_updates=Update.ALL_TYPES)
             
         except Exception as e:
             print(f"❌ Bot crashed: {e}")
             import traceback
             traceback.print_exc()
             print("🔄 Auto-restarting in 15 seconds...")
-            time.sleep(15)  # Wait before restarting
+            time.sleep(15)
+            continue
 
 if __name__ == '__main__':
     main()
@@ -9677,6 +9562,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
