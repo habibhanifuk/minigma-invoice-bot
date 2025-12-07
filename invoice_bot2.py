@@ -2827,6 +2827,459 @@ async def schedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return SELECT_CLIENT
 
+# ===== NEW: SCHEDULING CALLBACK HANDLERS =====
+
+async def schedule_client_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle scheduling appointments for specific clients"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data.startswith("schedule_client_"):
+        try:
+            client_id = int(data.split("_")[2])
+            
+            # Get client details
+            client = get_client_by_id(client_id)
+            if client:
+                # Store in context for booking flow
+                context.user_data['scheduling'] = {
+                    'step': 'select_type',
+                    'client_id': client_id,
+                    'client_name': client[2],
+                    'appointment_data': {}
+                }
+                
+                # Show appointment type selection
+                keyboard = [
+                    [InlineKeyboardButton("👥 In-Person Meeting", callback_data=f"book_type_inperson_{client_id}")],
+                    [InlineKeyboardButton("📞 Phone Call", callback_data=f"book_type_phone_{client_id}")],
+                    [InlineKeyboardButton("💻 Video Call", callback_data=f"book_type_video_{client_id}")],
+                    [InlineKeyboardButton("📝 Consultation", callback_data=f"book_type_consultation_{client_id}")],
+                    [InlineKeyboardButton("🔙 Back to Clients", callback_data="schedule_back"),
+                     InlineKeyboardButton("❌ Cancel", callback_data="schedule_cancel")]
+                ]
+                
+                await query.edit_message_text(
+                    f"📅 **Schedule with {client[2]}**\n\n"
+                    f"**Client:** {client[2]}\n"
+                    f"**Email:** {client[3] or 'Not set'}\n"
+                    f"**Phone:** {client[4] or 'Not set'}\n\n"
+                    f"Select appointment type:",
+                    reply_markup=InlineKeyboardMarkup(keyboard),
+                    parse_mode='Markdown'
+                )
+            else:
+                await query.edit_message_text(
+                    "❌ **Client not found**\n\n"
+                    "This client may have been deleted.",
+                    parse_mode='Markdown'
+                )
+        except (IndexError, ValueError):
+            await query.edit_message_text(
+                "❌ **Invalid request**\n\n"
+                "Please try again or use the menu.",
+                parse_mode='Markdown'
+            )
+    elif data == "schedule_back":
+        # Go back to schedule menu
+        await schedule_command(update, context)
+    elif data == "schedule_cancel":
+        # Cancel scheduling
+        if 'scheduling' in context.user_data:
+            del context.user_data['scheduling']
+        await query.edit_message_text(
+            "❌ **Scheduling cancelled**\n\n"
+            "No appointment was created.",
+            parse_mode='Markdown'
+        )
+    else:
+        await query.answer("Please use the menu options.")
+
+async def handle_appointment_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle all appointment-related button clicks"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data == "book_appointment_start":
+        await start_appointment_booking(query, user_id)
+    
+    elif data == "view_schedule_today":
+        await calendar_command(update, context)
+    
+    elif data.startswith("calendar_"):
+        await handle_calendar_navigation(query, data, user_id)
+    
+    elif data.startswith("toggle_reminder_"):
+        appointment_id = int(data.split("_")[2])
+        await toggle_appointment_reminder(query, appointment_id)
+    
+    elif data == "schedule_back":
+        await schedule_command(update, context)
+    
+    elif data == "appt_view_calendar":
+        await calendar_command(update, context)
+    
+    elif data == "appt_new":
+        await schedule_command(update, context)
+    
+    elif data.startswith("view_appt_"):
+        appointment_id = int(data.split("_")[2])
+        await view_appointment_details(query, appointment_id)
+    
+    else:
+        await query.edit_message_text(
+            "⚠️ **Feature Coming Soon**\n\n"
+            "This appointment feature is in development.\n"
+            "Basic booking is available via /quickbook",
+            parse_mode='Markdown'
+        )
+
+async def start_appointment_booking(query, user_id):
+    """Start the appointment booking flow"""
+    clients = get_user_clients(user_id)
+    
+    if not clients:
+        await query.edit_message_text(
+            "👥 **Add a Client First**\n\n"
+            "You need to add at least one client before booking appointments.\n\n"
+            "Use /clients to add your first client, then try booking again.",
+            parse_mode='Markdown'
+        )
+        return
+    
+    # Show client selection
+    keyboard = []
+    for client in clients[:8]:  # Max 8 clients
+        keyboard.append([
+            InlineKeyboardButton(f"👤 {client[2]}", callback_data=f"book_client_{client[0]}")
+        ])
+    
+    keyboard.append([
+        InlineKeyboardButton("🔙 Back", callback_data="schedule_back")
+    ])
+    
+    await query.edit_message_text(
+        "📅 **Book Appointment - Step 1**\n\n"
+        "Select a client for the appointment:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+async def handle_booking_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle the appointment booking flow callbacks"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data.startswith("book_type_"):
+        # Extract type and client_id
+        parts = data.split("_")
+        appointment_type = parts[2]  # inperson, phone, video, etc.
+        
+        # Check if client_id is in callback data
+        client_id = None
+        if len(parts) > 3:
+            try:
+                client_id = int(parts[3])
+                context.user_data['booking_client_id'] = client_id
+            except:
+                client_id = None
+        
+        # Get client info if available
+        client_name = ""
+        if client_id:
+            client = get_client_by_id(client_id)
+            client_name = client[2] if client else "Client"
+        
+        # Store in context
+        context.user_data['booking'] = {
+            'type': appointment_type,
+            'client_id': client_id,
+            'client_name': client_name,
+            'step': 'date_selection',
+            'created_at': datetime.now()
+        }
+        
+        # Show date selection
+        await show_date_selection(query, user_id, appointment_type, client_name)
+    
+    elif data.startswith("book_client_"):
+        # Client selection
+        client_id = int(data.split("_")[2])
+        client = get_client_by_id(client_id)
+        
+        if client:
+            context.user_data['booking_client_id'] = client_id
+            
+            await query.edit_message_text(
+                f"✅ **Client selected: {client[2]}**\n\n"
+                "Now choose appointment type:",
+                parse_mode='Markdown'
+            )
+            
+            # Show type selection
+            keyboard = [
+                [InlineKeyboardButton("👥 In-Person", callback_data=f"book_type_inperson_{client_id}")],
+                [InlineKeyboardButton("📞 Phone Call", callback_data=f"book_type_phone_{client_id}")],
+                [InlineKeyboardButton("💻 Video Call", callback_data=f"book_type_video_{client_id}")],
+                [InlineKeyboardButton("🔙 Change Client", callback_data="book_appointment_start")]
+            ]
+            
+            await query.message.reply_text(
+                "**Select appointment type:**",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        else:
+            await query.edit_message_text("❌ Client not found")
+    
+    elif data == "booking_cancel":
+        # Cancel booking
+        if 'booking' in context.user_data:
+            del context.user_data['booking']
+        if 'booking_client_id' in context.user_data:
+            del context.user_data['booking_client_id']
+        
+        await query.edit_message_text(
+            "❌ **Booking cancelled**\n\n"
+            "No appointment was created.",
+            parse_mode='Markdown'
+        )
+    
+    elif data == "booking_back":
+        # Go back in booking flow
+        await schedule_command(update, context)
+    
+    elif data.startswith("select_date_"):
+        # Date selected
+        date_str = data.split("_")[2]
+        selected_date = datetime.strptime(date_str, '%Y-%m-%d')
+        
+        context.user_data['booking']['selected_date'] = selected_date
+        
+        await show_time_selection(query, user_id, selected_date)
+
+async def show_date_selection(query, user_id: int, appointment_type: str, client_name: str = ""):
+    """Show date selection for booking"""
+    today = datetime.now()
+    
+    # Create date buttons for next 14 days
+    keyboard = []
+    row = []
+    
+    for day_offset in range(14):
+        current_date = today + timedelta(days=day_offset)
+        
+        # Check if it's a working day (default Monday-Friday)
+        if current_date.weekday() < 5:  # 0-4 = Monday-Friday
+            day_text = current_date.strftime("%a %d")
+            if day_offset == 0:
+                day_text = f"🟢 {day_text}"
+            elif day_offset == 1:
+                day_text = f"🔵 {day_text}"
+            
+            row.append(InlineKeyboardButton(
+                day_text, 
+                callback_data=f"select_date_{current_date.strftime('%Y-%m-%d')}"
+            ))
+        
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+    
+    if row:
+        keyboard.append(row)
+    
+    # Add navigation and options
+    keyboard.append([
+        InlineKeyboardButton("📅 Calendar View", callback_data="calendar_advanced"),
+        InlineKeyboardButton("🔄 This Week", callback_data="select_week_today")
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton("🔙 Back", callback_data="booking_back"),
+        InlineKeyboardButton("❌ Cancel", callback_data="booking_cancel")
+    ])
+    
+    client_info = f"with {client_name}" if client_name else ""
+    
+    await query.edit_message_text(
+        f"📅 **Step 3: Select Date**\n\n"
+        f"**Type:** {appointment_type.replace('_', ' ').title()}\n"
+        f"**Client:** {client_name or 'Not selected'}\n\n"
+        f"🟢 = Today | 🔵 = Tomorrow\n\n"
+        f"Select a date for your appointment {client_info}:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def show_time_selection(query, user_id: int, selected_date: datetime):
+    """Show time selection for booking"""
+    # Get available time slots for this date
+    available_slots = get_available_slots(user_id, selected_date.date())
+    
+    if not available_slots:
+        # No slots available, suggest another date
+        await query.edit_message_text(
+            f"❌ **No available slots on {selected_date.strftime('%A, %d %B')}**\n\n"
+            f"All time slots are booked or outside working hours.\n\n"
+            "Please select another date:",
+            parse_mode='Markdown'
+        )
+        await show_date_selection(query, user_id, 
+                                context.user_data['booking'].get('type', 'meeting'),
+                                context.user_data['booking'].get('client_name', ''))
+        return
+    
+    # Create time buttons
+    keyboard = []
+    row = []
+    
+    for i, slot in enumerate(available_slots[:12]):  # Show max 12 slots
+        row.append(InlineKeyboardButton(
+            slot, 
+            callback_data=f"select_time_{slot.replace(':', '')}"
+        ))
+        
+        if len(row) == 3:
+            keyboard.append(row)
+            row = []
+    
+    if row:
+        keyboard.append(row)
+    
+    # Add navigation
+    keyboard.append([
+        InlineKeyboardButton("◀️ Different Date", callback_data="booking_back"),
+        InlineKeyboardButton("❌ Cancel", callback_data="booking_cancel")
+    ])
+    
+    await query.edit_message_text(
+        f"⏰ **Step 4: Select Time**\n\n"
+        f"**Date:** {selected_date.strftime('%A, %d %B %Y')}\n\n"
+        f"Available time slots:\n"
+        f"(Each slot is 60 minutes)",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+async def handle_calendar_navigation(query, data: str, user_id: int):
+    """Handle calendar navigation buttons"""
+    if data == "calendar_today":
+        await calendar_command(query, context)
+    elif data.startswith("calendar_prev_"):
+        # Navigate to previous week
+        date_str = data.split("_")[2]
+        # Implementation for week navigation
+        await query.answer("Previous week view coming soon!")
+    elif data.startswith("calendar_next_"):
+        # Navigate to next week
+        await query.answer("Next week view coming soon!")
+    elif data.startswith("calendar_select_"):
+        # Select specific date
+        date_str = data.split("_")[2]
+        selected_date = datetime.strptime(date_str, '%Y-%m-%d')
+        
+        # Update context
+        if 'calendar_view' not in context.user_data:
+            context.user_data['calendar_view'] = {}
+        context.user_data['calendar_view']['selected_date'] = selected_date
+        
+        await show_calendar_view(query, context)
+    else:
+        await query.answer("Calendar feature coming soon!")
+
+async def toggle_appointment_reminder(query, appointment_id: int):
+    """Toggle reminders for an appointment"""
+    appointment = get_appointment(appointment_id)
+    
+    if not appointment:
+        await query.answer("Appointment not found")
+        return
+    
+    # Toggle reminder_sent field
+    new_status = not appointment[9] if appointment[9] is not None else True
+    
+    # Update database
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    cursor.execute('UPDATE appointments SET reminder_sent = ? WHERE appointment_id = ?', 
+                  (1 if new_status else 0, appointment_id))
+    conn.commit()
+    conn.close()
+    
+    if new_status:
+        message = "✅ Reminders ENABLED for this appointment"
+    else:
+        message = "🔕 Reminders DISABLED for this appointment"
+    
+    await query.answer(message)
+    # Refresh the view
+    await appointments_command(query, context)
+
+async def view_appointment_details(query, appointment_id: int):
+    """View detailed information about an appointment"""
+    appointment = get_appointment(appointment_id)
+    
+    if not appointment:
+        await query.answer("Appointment not found")
+        return
+    
+    appt_time = parser.parse(appointment[5])
+    client_name = appointment[12] if len(appointment) > 12 else "Unknown"
+    title = appointment[3] or "No title"
+    duration = appointment[6] or 60
+    status = appointment[8] or 'scheduled'
+    notes = appointment[7] or "No notes"
+    
+    # Status emoji
+    status_emojis = {
+        'scheduled': '⏰',
+        'confirmed': '✅',
+        'completed': '☑️',
+        'cancelled': '❌',
+        'no_show': '🚫'
+    }
+    status_emoji = status_emojis.get(status, '📅')
+    
+    message = f"{status_emoji} **Appointment Details**\n\n"
+    message += f"**Title:** {title}\n"
+    message += f"**Client:** {client_name}\n"
+    message += f"**Date:** {appt_time.strftime('%A, %d %B %Y')}\n"
+    message += f"**Time:** {appt_time.strftime('%I:%M %p')}\n"
+    message += f"**Duration:** {duration} minutes\n"
+    message += f"**Status:** {status.title()}\n"
+    message += f"**Notes:** {notes}\n\n"
+    
+    # Action buttons
+    keyboard = [
+        [
+            InlineKeyboardButton("🔄 Reschedule", callback_data=f"reschedule_{appointment_id}"),
+            InlineKeyboardButton("❌ Cancel", callback_data=f"cancel_{appointment_id}")
+        ],
+        [
+            InlineKeyboardButton("⏰ Reminders", callback_data=f"reminders_{appointment_id}"),
+            InlineKeyboardButton("📋 Add Notes", callback_data=f"notes_{appointment_id}")
+        ],
+        [
+            InlineKeyboardButton("🔙 Back to List", callback_data="appointments_back")
+        ]
+    ]
+    
+    await query.edit_message_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
+
+# ===== EXISTING SCHEDULING COMMANDS (Keep as is) =====
+
 async def quickbook_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Quick appointment booking for today/tomorrow"""
     user_id = update.effective_user.id
@@ -3271,701 +3724,7 @@ async def reschedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
         keyboard.append([
             InlineKeyboardButton(
                 f"📅 {appt_time.strftime('%b %d %H:%M')} - {title[:15]}", 
-                callback_data=f"reschedule_select_{appt[0]}"
-            )
-        ])
-    
-    keyboard.append([
-        InlineKeyboardButton("❌ Cancel", callback_data="reschedule_cancel")
-    ])
-    
-    await update.message.reply_text(
-        "🔄 **Reschedule Appointment**\n\n"
-        "Select an appointment to reschedule:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    
-    return APPOINTMENT_EDIT
-
-async def cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Cancel an appointment"""
-    user_id = update.effective_user.id
-    
-    # Get upcoming appointments
-    today = datetime.now()
-    appointments = get_user_appointments(user_id, today, None, 'scheduled')
-    
-    if not appointments:
-        await update.message.reply_text(
-            "❌ **Cancel Appointment**\n\n"
-            "No upcoming appointments found to cancel.\n\n"
-            "📋 Use /appointments to view all appointments"
-        )
-        return
-    
-    keyboard = []
-    for appt in appointments[:10]:  # Show first 10
-        appt_time = parser.parse(appt[5])
-        client_name = appt[12] if len(appt) > 12 else "Unknown"
-        title = appt[3] or "Meeting"
-        
-        keyboard.append([
-            InlineKeyboardButton(
-                f"📅 {appt_time.strftime('%b %d %H:%M')} - {title[:15]}", 
-                callback_data=f"cancel_select_{appt[0]}"
-            )
-        ])
-    
-    keyboard.append([
-        InlineKeyboardButton("❌ Cancel Action", callback_data="cancel_action_cancel")
-    ])
-    
-    await update.message.reply_text(
-        "❌ **Cancel Appointment**\n\n"
-        "Select an appointment to cancel:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-
-async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Set custom reminders for appointments"""
-    user_id = update.effective_user.id
-    
-    # Get upcoming appointments
-    today = datetime.now()
-    next_month = today + timedelta(days=30)
-    appointments = get_user_appointments(user_id, today, next_month, 'scheduled')
-    
-    if not appointments:
-        await update.message.reply_text(
-            "⏰ **Set Reminders**\n\n"
-            "No upcoming appointments found to set reminders for.\n\n"
-            "📅 Use /schedule to book new appointments"
-        )
-        return
-    
-    keyboard = []
-    for appt in appointments[:10]:  # Show first 10
-        appt_time = parser.parse(appt[5])
-        client_name = appt[12] if len(appt) > 12 else "Unknown"
-        title = appt[3] or "Meeting"
-        
-        keyboard.append([
-            InlineKeyboardButton(
-                f"📅 {appt_time.strftime('%b %d %H:%M')} - {title[:15]}", 
-                callback_data=f"remind_select_{appt[0]}"
-            )
-        ])
-    
-    keyboard.append([
-        InlineKeyboardButton("⚙️ Default Settings", callback_data="remind_settings"),
-        InlineKeyboardButton("❌ Cancel", callback_data="remind_cancel")
-    ])
-    
-    await update.message.reply_text(
-        "⏰ **Set Reminders**\n\n"
-        "Select an appointment to set a reminder:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    
-    return SET_REMINDER_TIME
-
-async def settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Appointment and calendar settings"""
-    user_id = update.effective_user.id
-    
-    # Get current settings
-    calendar_settings = get_calendar_settings(user_id)
-    working_hours = get_working_hours(user_id)
-    
-    message = "⚙️ **Appointment Settings**\n\n"
-    
-    # Show current calendar settings
-    if calendar_settings:
-        message += "**Calendar Settings:**\n"
-        message += f"• Default View: {calendar_settings[2] or 'Week'}\n"
-        message += f"• Slot Duration: {calendar_settings[4] or 30} minutes\n"
-        message += f"• Email Notifications: {'✅ On' if calendar_settings[6] else '❌ Off'}\n"
-        message += f"• Telegram Notifications: {'✅ On' if calendar_settings[7] else '❌ Off'}\n\n"
-    
-    # Show working hours
-    message += "**Working Hours:**\n"
-    days_map = {0: 'Mon', 1: 'Tue', 2: 'Wed', 3: 'Thu', 4: 'Fri', 5: 'Sat', 6: 'Sun'}
-    
-    for hours in working_hours:
-        day_num = hours[2]
-        is_working = hours[3]
-        start_time = hours[4]
-        end_time = hours[5]
-        
-        day_name = days_map.get(day_num, f"Day {day_num}")
-        
-        if is_working and start_time and end_time:
-            message += f"• {day_name}: {start_time} - {end_time}\n"
-        else:
-            message += f"• {day_name}: ❌ Not working\n"
-    
-    # Create settings keyboard
-    keyboard = [
-        [
-            InlineKeyboardButton("🕐 Working Hours", callback_data="settings_working_hours"),
-            InlineKeyboardButton("📅 Calendar", callback_data="settings_calendar")
-        ],
-        [
-            InlineKeyboardButton("📧 Email Templates", callback_data="settings_email_templates"),
-            InlineKeyboardButton("⏰ Reminders", callback_data="settings_reminders")
-        ],
-        [
-            InlineKeyboardButton("📊 Appointment Types", callback_data="settings_appointment_types"),
-            InlineKeyboardButton("🚫 Unavailable Dates", callback_data="settings_unavailable")
-        ],
-        [
-            InlineKeyboardButton("💾 Export Settings", callback_data="settings_export"),
-            InlineKeyboardButton("🔙 Back", callback_data="settings_back")
-        ]
-    ]
-    
-    await update.message.reply_text(
-        message,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode='Markdown'
-    )
-    
-    return EMAIL_CONFIG
-
-# ==================================================
-# EXISTING COMMANDS (KEPT AS IS)
-# ==================================================
-
-# Premium features commands
-async def premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show premium features and subscription options"""
-    user_id = update.effective_user.id
-    
-    if is_premium_user(user_id):
-        await update.message.reply_text(
-            "🎉 **You're a Premium User!**\n\n"
-            "You have access to all premium features:\n"
-            "• Company/VAT registration numbers\n"
-            "• VAT calculation on invoices\n"
-            "• Client database\n"
-            "• Payment tracking\n"
-            "• Unlimited invoices\n"
-            "• **Advanced Appointment Scheduling**\n"
-            "• **Calendar Management**\n"
-            "• **Automated Reminders**\n"
-            "• **Email Confirmations**\n\n"
-            "Use /setup to configure company details\n"
-            "Use /clients to manage clients\n"
-            "Use /payments to track payments\n"
-            "Use /schedule for appointment booking",
-            parse_mode='Markdown'
-        )
-    else:
-        await update.message.reply_text(
-            "🔒 **Premium Features**\n\n"
-            "Get access to:\n"
-            "• Company/VAT registration numbers\n"
-            "• VAT calculation on invoices\n"
-            "• Client database management\n"
-            "• Payment tracking\n"
-            "• Unlimited invoices & quotes\n"
-            "• Email/SMS delivery\n"
-            "• **Advanced Appointment Scheduling**\n"
-            "• **Calendar Management**\n"
-            "• **Automated Reminders**\n"
-            "• **Email Confirmations**\n\n"
-            "💳 **Pricing:**\n"
-            "• **Monthly:** £12 per month\n"
-            "• **Annual:** £100 per year (save £44!)\n\n"
-            "📞 **How to upgrade:**\n"
-            "1. Use `/contact` to get payment instructions\n"
-            "2. Choose your plan (monthly/annual)\n"
-            "3. Complete payment\n"
-            "4. Get instant premium activation\n\n"
-            "Use `/premium` again to check your status after payment!",
-            parse_mode='Markdown'
-        )
-
-async def contact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Show how to contact for premium"""
-    await update.message.reply_text(
-        "📞 **Contact for Premium Access**\n\n"
-        "**To upgrade to Premium, contact the bot owner directly:**\n\n"
-        "💬 **Telegram:** @MinigimaUK\n"
-        "📧 **Email:** minigmauk@gmail.com\n\n"
-        "**When contacting, please provide:**\n"
-        "• Your preferred plan: Monthly (£12) or Annual (£100)\n"
-        "• Your Telegram User ID (use `/myid` to get it)\n\n"
-        "**You'll receive:**\n"
-        "• Payment instructions (PayPal/Bank Transfer)\n" 
-        "• Instant activation after payment\n"
-        "• Confirmation message in this bot\n\n"
-        "Use `/premium` to check your status after payment!",
-        parse_mode='Markdown'
-    )
-
-async def myid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Get user's own Telegram ID"""
-    user_id = update.effective_user.id
-    await update.message.reply_text(
-        f"🔍 **Your Telegram User ID:** `{user_id}`\n\n"
-        "Provide this ID when contacting for premium access.",
-        parse_mode='Markdown'
-    )
-
-async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Debug command to check user ID and premium manager"""
-    user_id = update.effective_user.id
-    
-    # Test premium_manager access
-    try:
-        premium_count = len(premium_manager.premium_users)
-        premium_status = f"Premium users: {premium_count}"
-    except Exception as e:
-        premium_status = f"Premium manager error: {e}"
-    
-    await update.message.reply_text(
-        f"🔍 **Debug Info:**\n"
-        f"Your User ID: `{user_id}`\n"
-        f"Admin ID: `334262726`\n"
-        f"Admin Access: {'✅ YES' if user_id == 334262726 else '❌ NO'}\n"
-        f"{premium_status}",
-        parse_mode='Markdown'
-    )
-
-async def add_premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to add premium users"""
-    user_id = update.effective_user.id
-    
-    # ⚠️ REPLACE 123456789 WITH YOUR ACTUAL TELEGRAM ID ⚠️
-    ADMIN_ID = 334262726
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin only command")
-        return
-    
-    try:
-        # Command: /add_premium USER_ID [username]
-        parts = update.message.text.split()
-        if len(parts) < 2:
-            await update.message.reply_text(
-                "❌ Usage: `/add_premium USER_ID [username]`",
-                parse_mode='Markdown'
-            )
-            return
-        
-        new_user_id = int(parts[1])
-        username = parts[2] if len(parts) > 2 else ""
-        
-        success, result_msg = premium_manager.add_premium_user(new_user_id, username)
-        await update.message.reply_text(result_msg)
-        
-    except ValueError:
-        await update.message.reply_text("❌ Invalid user ID")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
-
-async def remove_premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to remove premium users"""
-    user_id = update.effective_user.id
-    
-    # ⚠️ REPLACE 123456789 WITH YOUR ACTUAL TELEGRAM ID ⚠️
-    ADMIN_ID = 334262726
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin only command")
-        return
-    
-    try:
-        parts = update.message.text.split()
-        if len(parts) < 2:
-            await update.message.reply_text(
-                "❌ Usage: `/remove_premium USER_ID`",
-                parse_mode='Markdown'
-            )
-            return
-        
-        remove_user_id = int(parts[1])
-        success, result_msg = premium_manager.remove_premium_user(remove_user_id)
-        await update.message.reply_text(result_msg)
-        
-    except ValueError:
-        await update.message.reply_text("❌ Invalid user ID")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Error: {e}")
-
-async def list_premium_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Admin command to list premium users"""
-    user_id = update.effective_user.id
-    
-    # ⚠️ REPLACE 123456789 WITH YOUR ACTUAL TELEGRAM ID ⚠️
-    ADMIN_ID = 334262726
-    if user_id != ADMIN_ID:
-        await update.message.reply_text("❌ Admin only command")
-        return
-    
-    premium_count = len(premium_manager.premium_users)
-    await update.message.reply_text(
-        f"📊 **Premium Users:** {premium_count}\n\n"
-        f"User IDs: {', '.join(map(str, premium_manager.premium_users))}",
-        parse_mode='Markdown'
-    )
-
-async def setup_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Setup company information"""
-    user_id = update.effective_user.id
-    
-    if not is_premium_user(user_id):
-        await update.message.reply_text(
-            "❌ **Premium Feature**\n\n"
-            "Company setup is available for premium users only.\n"
-            "Use /premium to upgrade and unlock this feature.",
-            parse_mode='Markdown'
-        )
-        return
-        
-    keyboard = [
-        [InlineKeyboardButton("🏢 Set Company Reg Number", callback_data="setup_company_reg")],
-        [InlineKeyboardButton("📊 Set VAT Number", callback_data="setup_vat_number")],
-        [InlineKeyboardButton("🔙 Back", callback_data="setup_back")]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    user = get_user(user_id)
-    current_info = ""
-    
-    # FIXED: Safe tuple indexing with bounds checking
-    if user and len(user) > 9 and user[9]:  # company_reg_number
-        current_info += f"Current Company Reg: {user[9]}\n"
-    if user and len(user) > 10 and user[10]:  # vat_reg_number
-        current_info += f"Current VAT Reg: {user[10]}\n"
-    
-    await update.message.reply_text(
-        f"🏢 **Company Information Setup**\n\n{current_info}\n"
-        "Set up your company details that will appear on invoices:",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-async def clients_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Client database management"""
-    user_id = update.effective_user.id
-    
-    if not is_premium_user(user_id):
-        await update.message.reply_text(
-            "❌ **Premium Feature**\n\n"
-            "Client database is available for premium users only.\n"
-            "Use /premium to upgrade and unlock this feature.",
-            parse_mode='Markdown'
-        )
-        return
-        
-    clients = get_user_clients(user_id)
-    
-    if not clients:
-        keyboard = [
-            [InlineKeyboardButton("➕ Add New Client", callback_data="client_start")],
-            [InlineKeyboardButton("🔙 Back", callback_data="clients_back")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        await update.message.reply_text(
-            "👥 **Client Database**\n\n"
-            "No clients found. Add your first client to get started!",
-            reply_markup=reply_markup,
-            parse_mode='Markdown'
-        )
-        return
-    
-    keyboard = []
-    for client in clients[:10]:  # Show first 10 clients
-        keyboard.append([InlineKeyboardButton(f"👤 {client[2]}", callback_data=f"view_client_{client[0]}")])
-    
-    keyboard.extend([
-        [InlineKeyboardButton("➕ Add New Client", callback_data="client_start")],
-        [InlineKeyboardButton("🔍 Search Invoices by Client", callback_data="search_client_invoices")],
-        [InlineKeyboardButton("🔙 Back", callback_data="clients_back")]
-    ])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        f"👥 **Client Database**\n\n"
-        f"You have {len(clients)} clients. Select a client to view details:",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-async def payments_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Payment tracking"""
-    user_id = update.effective_user.id
-    
-    if not is_premium_user(user_id):
-        await update.message.reply_text(
-            "❌ **Premium Feature**\n\n"
-            "Payment tracking is available for premium users only.\n"
-            "Use /premium to upgrade and unlock this feature.",
-            parse_mode='Markdown'
-        )
-        return
-        
-    unpaid_invoices = get_unpaid_invoices(user_id)
-    
-    if not unpaid_invoices:
-        await update.message.reply_text(
-            "💰 **Payment Tracking**\n\n"
-            "🎉 All your invoices are paid! No outstanding payments.",
-            parse_mode='Markdown'
-        )
-        return
-    
-    keyboard = []
-    for invoice in unpaid_invoices[:10]:  # Show first 10 unpaid invoices
-        keyboard.append([InlineKeyboardButton(
-            f"📄 {invoice[2]} - {invoice[3]} - {invoice[5]}{invoice[7]:.2f}", 
-            callback_data=f"mark_paid_{invoice[0]}"
-        )])
-    
-    keyboard.append([InlineKeyboardButton("🔙 Back", callback_data="payments_back")])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await update.message.reply_text(
-        f"💰 **Payment Tracking**\n\n"
-        f"You have {len(unpaid_invoices)} unpaid invoices. Mark them as paid:",
-        reply_markup=reply_markup,
-        parse_mode='Markdown'
-    )
-
-async def my_invoices_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    
-    # Check if user wants to search by client
-    if context.args:
-        client_name = ' '.join(context.args)
-        invoices = get_user_invoices(user_id, client_name)
-        if invoices:
-            message = f"📋 Invoices for {client_name}:\n\n"
-            for inv in invoices:
-                paid_status = "✅ Paid" if inv[11] else "❌ Unpaid"
-                message += f"• {inv[2]} - {inv[3]} - {inv[5]}{inv[7]:.2f} - {paid_status}\n"
-        else:
-            message = f"No invoices found for client: {client_name}"
-    else:
-        invoices = get_user_invoices(user_id)
-        if not invoices:
-            await update.message.reply_text("You haven't created any approved invoices yet.")
-            return
-        
-        message = "📋 Your Recent Invoices:\n\n"
-        for inv in invoices[:10]:  # Show last 10 invoices
-            paid_status = "✅ Paid" if inv[11] else "❌ Unpaid"
-            message += f"• {inv[2]} - {inv[3]} - {inv[5]}{inv[7]:.2f} - {paid_status}\n"
-        
-        if is_premium_user(user_id):
-            message += "\n💡 *Tip: Use* `/myinvoices ClientName` *to filter by client*"
-    
-    await update.message.reply_text(message, parse_mode='Markdown')
-
-# Bot handlers
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user = update.effective_user
-    user_id = user.id
-    
-    if not get_user(user_id):
-        create_user(user_id, user.username, user.first_name, user.last_name)
-        await update.message.reply_text("✅ Your account has been created! Enjoy your 14-day free trial.")
-    
-    # Get real trial status
-    conn = sqlite3.connect('invoices.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT trial_end_date, trial_used FROM users WHERE user_id = ?', (user_id,))
-    result = cursor.fetchone()
-    conn.close()
-    
-    trial_info = ""
-    if result:
-        trial_end_date, trial_used = result
-        if trial_used and trial_end_date:
-            trial_end = parse_trial_end_date(trial_end_date)
-            days_left = (trial_end - datetime.now()).days
-            if days_left > 0:
-                trial_info = f"\n\n⏰ **Your free trial ends in {days_left} days**"
-            else:
-                trial_info = f"\n\n❌ **Your free trial has ended**"
-        elif not trial_used:
-            trial_info = f"\n\n🎉 **Your 14-day free trial starts now!**"
-    
-    welcome_message = f"""
-🏢 **Welcome to Minigma Business Suite!**{trial_info}
-
-✨ **All Premium Features Unlocked During Trial:**
-
-📄 **Invoice & Quote Management**
-• Unlimited professional invoices
-• Automated quote generation  
-• Multi-currency support
-• VAT calculation (where applicable)
-
-👥 **Client & Payment Tools**
-• Complete client database
-• Payment tracking & reconciliation
-• Automated payment reminders
-• Client communication history
-
-📅 **Appointment Scheduling**
-• Full calendar management
-• Appointment booking system
-• Automated reminders
-• Email confirmations
-
-🏢 **Business Operations**
-• Company/VAT registration setup
-• Professional PDF generation
-• Advanced reporting dashboard
-• Custom branding options
-
-📊 **After Trial Period:**
-• **Business Lite:** 10 invoices/month (free)
-• **Premium Suite:** Unlimited everything + priority support
-
-🚀 **Your trial gives full access to test all premium tools!**
-
-💡 **Quick Start:** 
-• Use /create for invoices
-• Use /schedule for appointments
-• Use /clients for database
-• Use /payments for tracking
-• Use /calendar for schedule view
-"""
-    
-    await update.message.reply_text(welcome_message, parse_mode='Markdown')
-
-async def set_logo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Please upload your company logo as a photo. "
-        "The image should be clear and in PNG or JPG format."
-    )
-
-async def handle_logo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    photo = update.message.photo[-1]
-    
-    user_dir = f"logos/{user_id}"
-    os.makedirs(user_dir, exist_ok=True)
-    
-    photo_file = await context.bot.get_file(photo.file_id)
-    logo_path = f"{user_dir}/logo.jpg"
-    await photo_file.download_to_drive(logo_path)
-    
-    update_user_company_info(user_id, logo_path=logo_path)
-    
-    await update.message.reply_text(
-        "✅ Logo uploaded successfully! It will appear on your invoices and appointment confirmations.\n"
-        "You can now set your company name using /company or start creating invoices with /create"
-    )
-
-async def set_company_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Please enter your company name. This will be displayed on your invoices and appointment confirmations."
-    )
-    context.user_data['awaiting_company_name'] = True
-
-async def handle_company_name(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.user_data.get('awaiting_company_name'):
-        return
-        
-    user_id = update.effective_user.id
-    company_name = update.message.text
-    
-    update_user_company_info(user_id, company_name=company_name)
-    context.user_data['awaiting_company_name'] = False
-    
-    await update.message.reply_text(
-        f"✅ Company name set to: {company_name}\n"
-        "You can now create invoices with /create or schedule appointments with /schedule"
-    )
-
-async def create_invoice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    user = get_user(user_id)
-    
-    if not user:
-        create_user(user_id, update.effective_user.username, update.effective_user.first_name, update.effective_user.last_name)
-        user = get_user(user_id)
-        await update.message.reply_text("✅ Your account has been created! Starting invoice creation...")
-    
-    trial_end = parse_trial_end_date(user[5]) if user[5] else datetime.now()
-    
-    if datetime.now() > trial_end:
-        monthly_count = get_user_invoice_count_this_month(user_id)
-        if monthly_count >= MONTHLY_INVOICE_LIMIT:
-            await update.message.reply_text(
-                f"❌ You've reached your monthly limit of {MONTHLY_INVOICE_LIMIT} invoices.\n"
-                "Please upgrade to Premium for unlimited invoices!\n\n"
-                "Use /premium to see premium features."
-            )
-            return
-    
-    context.user_data['current_invoice'] = {
-        'items': [],
-        'step': 'client_name'
-    }
-    
-    await update.message.reply_text(
-        "Let's create a new invoice! 🧾\n\n"
-        "First, please enter the client name:"
-    )
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = """
-🤖 Minigma Business Suite - Help
-
-📝 **Basic Commands:**
-/start - 🏢 Launch Minigma Business Suite
-/logo - Upload company logo
-/company - Set company name
-/create - Create new invoice
-/myinvoices - View your invoices
-/contact - Contact for premium
-/myid - Get your user ID
-/help - Show this help message
-
-📅 **Appointment Scheduling:**
-/schedule - 📅 Schedule new appointment
-/calendar - 🗓️ View calendar
-/quickbook - ⚡ Quick appointment booking
-/appointments - 📋 My appointments
-/today - 📅 Today's schedule
-/week - 🗓️ This week's schedule
-/remind - ⏰ Set reminders
-/reschedule - 🔄 Reschedule appointment
-/cancel - ❌ Cancel appointment
-/settings - ⚙️ Appointment settings
-
-💰 **Premium Commands:**
-/premium - Premium features info
-/setup - Company registration setup
-/clients - Client database
-/payments - Track payments
-
-💡 **Premium Features:**
-• Store company/VAT registration numbers
-• VAT calculation on invoices
-• Client database management
-• Payment tracking
-• Unlimited invoices
-• Advanced appointment scheduling
-• Calendar management
-• Automated reminders
-• Email confirmations
-
-📊 **Usage Limits:**
-• 14-day free trial (unlimited invoices)
-• After trial: 10 invoices per month
-• Premium: Unlimited invoices + all features
-
-Need help? Contact the bot owner!
-    """
-    await update.message.reply_text(help_text)
-
-print("✅ Part 4 updated with comprehensive scheduling command handlers!")
+               
 
 # ==================================================
 # PART 5: INVOICE, QUOTE & APPOINTMENT CREATION HANDLERS
@@ -6081,82 +5840,117 @@ def main():
             print("🚀 Initializing Minigma Business Suite v2.0...")
             print("📅 Comprehensive Appointment Scheduling System")
             
-            # Create application
-            application = Application.builder().token(BOT_TOKEN).build()
-            
-            # ===== ADD SCHEDULING COMMAND HANDLERS =====
-            application.add_handler(CommandHandler("schedule", schedule_command))
-            application.add_handler(CommandHandler("calendar", calendar_command))
-            application.add_handler(CommandHandler("quickbook", quickbook_command))
-            application.add_handler(CommandHandler("appointments", appointments_command))
-            application.add_handler(CommandHandler("today", today_command))
-            application.add_handler(CommandHandler("week", week_command))
-            application.add_handler(CommandHandler("remind", remind_command))
-            application.add_handler(CommandHandler("reschedule", reschedule_command))
-            application.add_handler(CommandHandler("cancel", cancel_command))
-            application.add_handler(CommandHandler("settings", settings_command))
-            
-            # ===== ADD EXISTING COMMAND HANDLERS =====
-            application.add_handler(CommandHandler("start", start))
-            application.add_handler(CommandHandler("logo", set_logo))
-            application.add_handler(CommandHandler("company", set_company_name))
-            application.add_handler(CommandHandler("create", create_invoice))
-            application.add_handler(CommandHandler("myinvoices", my_invoices_command))
-            application.add_handler(CommandHandler("premium", premium_command))
-            application.add_handler(CommandHandler("setup", setup_command))
-            application.add_handler(CommandHandler("clients", clients_command))
-            application.add_handler(CommandHandler("payments", payments_command))
-            application.add_handler(CommandHandler("help", help_command))
-            application.add_handler(CommandHandler("contact", contact_command))
-            application.add_handler(CommandHandler("myid", myid_command))
-            application.add_handler(CommandHandler("add_premium", add_premium_command))
-            application.add_handler(CommandHandler("remove_premium", remove_premium_command))
-            application.add_handler(CommandHandler("list_premium", list_premium_command))
-            application.add_handler(CommandHandler("debug", debug_command))
-            
-            # ===== ADD CONVERSATION HANDLERS FOR SCHEDULING =====
-            # Schedule conversation handler
-            schedule_conv = ConversationHandler(
-                entry_points=[CommandHandler("schedule", schedule_command)],
-                states={
-                    SELECT_CLIENT: [
-                        CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"),
-                        CallbackQueryHandler(schedule_new_client_handler, pattern="^schedule_new_client$"),
-                        CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-                    ],
-                    SELECT_TYPE: [
-                        CallbackQueryHandler(appointment_type_handler, pattern="^appointment_type_"),
-                        CallbackQueryHandler(appointment_custom_type_handler, pattern="^appointment_custom_type$"),
-                        CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-                    ],
-                    SELECT_DATE: [
-                        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_appointment_creation),
-                        CallbackQueryHandler(appointment_change_date_handler, pattern="^appointment_change_date$"),
-                        CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-                    ],
-                    SELECT_TIME: [
-                        CallbackQueryHandler(appointment_time_handler, pattern="^appointment_time_"),
-                        CallbackQueryHandler(appointment_change_date_handler, pattern="^appointment_change_date$"),
-                        CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-                    ],
-                    ADD_DESCRIPTION: [
-                        MessageHandler(filters.TEXT & ~filters.COMMAND, handle_appointment_creation),
-                        CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-                    ],
-                    CONFIRM_APPOINTMENT: [
-                        CallbackQueryHandler(appointment_confirm_save_handler, pattern="^appointment_confirm_save$"),
-                        CallbackQueryHandler(appointment_edit_handler, pattern="^appointment_edit$"),
-                        CallbackQueryHandler(appointment_change_datetime_handler, pattern="^appointment_change_datetime$"),
-                        CallbackQueryHandler(appointment_change_client_handler, pattern="^appointment_change_client$"),
-                        CallbackQueryHandler(appointment_send_email_handler, pattern="^appointment_send_email$"),
-                        CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
-                    ]
-                },
-                fallbacks=[CommandHandler("cancel", cancel_command)],
-                allow_reentry=True
-            )
-            
-            application.add_handler(schedule_conv)
+# Create application
+application = Application.builder().token(BOT_TOKEN).build()
+
+# ===== ADD SCHEDULING COMMAND HANDLERS =====
+application.add_handler(CommandHandler("schedule", schedule_command))
+application.add_handler(CommandHandler("calendar", calendar_command))
+application.add_handler(CommandHandler("quickbook", quickbook_command))
+application.add_handler(CommandHandler("appointments", appointments_command))
+application.add_handler(CommandHandler("today", today_command))
+application.add_handler(CommandHandler("week", week_command))
+application.add_handler(CommandHandler("remind", remind_command))
+application.add_handler(CommandHandler("reschedule", reschedule_command))
+application.add_handler(CommandHandler("cancel", cancel_command))
+application.add_handler(CommandHandler("settings", settings_command))
+
+# ===== ADD SCHEDULING CALLBACK HANDLERS =====
+# These handle button clicks for scheduling features
+application.add_handler(CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"))
+application.add_handler(CallbackQueryHandler(handle_appointment_buttons, pattern="^book_|^view_|^toggle_|^schedule_"))
+application.add_handler(CallbackQueryHandler(handle_booking_flow, pattern="^book_type_|^book_client_|^booking_|^select_"))
+application.add_handler(CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_|^week_|^month_|^today_"))
+application.add_handler(CallbackQueryHandler(view_appointment_details, pattern="^view_appt_"))
+application.add_handler(CallbackQueryHandler(toggle_appointment_reminder, pattern="^toggle_reminder_"))
+
+# Quick appointment booking callbacks
+application.add_handler(CallbackQueryHandler(handle_quick_booking, pattern="^quick_"))
+
+# Appointment management callbacks
+application.add_handler(CallbackQueryHandler(handle_appointment_actions, pattern="^reschedule_|^cancel_|^reminders_|^notes_"))
+
+# ===== ADD EXISTING COMMAND HANDLERS =====
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("logo", set_logo))
+application.add_handler(CommandHandler("company", set_company_name))
+application.add_handler(CommandHandler("create", create_invoice))
+application.add_handler(CommandHandler("myinvoices", my_invoices_command))
+application.add_handler(CommandHandler("premium", premium_command))
+application.add_handler(CommandHandler("setup", setup_command))
+application.add_handler(CommandHandler("clients", clients_command))
+application.add_handler(CommandHandler("payments", payments_command))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("contact", contact_command))
+application.add_handler(CommandHandler("myid", myid_command))
+application.add_handler(CommandHandler("add_premium", add_premium_command))
+application.add_handler(CommandHandler("remove_premium", remove_premium_command))
+application.add_handler(CommandHandler("list_premium", list_premium_command))
+application.add_handler(CommandHandler("debug", debug_command))
+
+# ===== ADD MEDIA HANDLERS =====
+application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name))
+
+# ===== ADD INVOICE CREATION HANDLERS =====
+# (Your existing invoice handlers here)
+
+# ===== ADD CONVERSATION HANDLERS FOR SCHEDULING =====
+# Schedule conversation handler
+schedule_conv = ConversationHandler(
+    entry_points=[CommandHandler("schedule", schedule_command)],
+    states={
+        SCHEDULE_START: [
+            CallbackQueryHandler(schedule_add_client_handler, pattern="^schedule_add_client$"),
+            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
+        ],
+        SELECT_CLIENT: [
+            CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"),
+            CallbackQueryHandler(schedule_new_client_handler, pattern="^schedule_new_client$"),
+            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
+        ],
+        SELECT_TYPE: [
+            CallbackQueryHandler(appointment_type_handler, pattern="^appointment_type_"),
+            CallbackQueryHandler(appointment_custom_type_handler, pattern="^appointment_custom_type$"),
+            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$"),
+            CallbackQueryHandler(handle_booking_flow, pattern="^book_type_")  # Added
+        ],
+        SELECT_DATE: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_appointment_creation),
+            CallbackQueryHandler(appointment_change_date_handler, pattern="^appointment_change_date$"),
+            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$"),
+            CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_select_")  # Added
+        ],
+        SELECT_TIME: [
+            CallbackQueryHandler(appointment_time_handler, pattern="^appointment_time_"),
+            CallbackQueryHandler(appointment_change_date_handler, pattern="^appointment_change_date$"),
+            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$"),
+            CallbackQueryHandler(handle_booking_flow, pattern="^select_time_")  # Added
+        ],
+        ADD_DESCRIPTION: [
+            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_appointment_creation),
+            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
+        ],
+        CONFIRM_APPOINTMENT: [
+            CallbackQueryHandler(appointment_confirm_save_handler, pattern="^appointment_confirm_save$"),
+            CallbackQueryHandler(appointment_edit_handler, pattern="^appointment_edit$"),
+            CallbackQueryHandler(appointment_change_datetime_handler, pattern="^appointment_change_datetime$"),
+            CallbackQueryHandler(appointment_change_client_handler, pattern="^appointment_change_client$"),
+            CallbackQueryHandler(appointment_send_email_handler, pattern="^appointment_send_email$"),
+            CallbackQueryHandler(schedule_cancel_handler, pattern="^schedule_cancel$")
+        ]
+    },
+    fallbacks=[CommandHandler("cancel", cancel_command)],
+    allow_reentry=True
+)
+
+application.add_handler(schedule_conv)
+
+# ===== ADD OTHER CONVERSATION HANDLERS =====
+# (Your existing conversation handlers for invoices, etc.)
+
+# ===== ADD UNHANDLED MESSAGE HANDLER =====
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_unrecognized_message))
             
             # ===== ADD OTHER HANDLERS =====
             # Photo handler for logos
@@ -9869,6 +9663,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
