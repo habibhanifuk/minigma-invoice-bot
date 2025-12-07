@@ -3724,9 +3724,9 @@ for appt in appointments[:10]:  # Show first 10
     keyboard.append([
         InlineKeyboardButton(
             f"📅 {appt_time.strftime('%b %d %H:%M')} - {title[:15]}", 
-            callback_data=f"reschedule_select_{appt[0]}"  # ADDED THIS LINE
-        )  # ADDED CLOSING PARENTHESIS
-    ])
+            callback_data=f"reschedule_select_{appt[0]}"
+        )
+    ])  # <-- THIS CLOSING BRACKET IS CRITICAL
 
 keyboard.append([
     InlineKeyboardButton("❌ Cancel", callback_data="reschedule_cancel")
@@ -9677,6 +9677,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
