@@ -5847,27 +5847,27 @@ def main():
     os.makedirs('appointments', exist_ok=True)
     os.makedirs('calendar_exports', exist_ok=True)
     
-    import time
-    
-    while True:  # Infinite loop for auto-restart
-        try:
-            print("🚀 Initializing Minigma Business Suite v2.0...")
-            print("📅 Comprehensive Appointment Scheduling System")
-            
-            # Create application - THIS LINE MUST BE INSIDE THE TRY BLOCK!
-application = Application.builder().token(BOT_TOKEN).build()
-            
-            # ===== ADD SCHEDULING COMMAND HANDLERS =====
-application.add_handler(CommandHandler("schedule", schedule_command))
-application.add_handler(CommandHandler("calendar", calendar_command))
-application.add_handler(CommandHandler("quickbook", quickbook_command))
-application.add_handler(CommandHandler("appointments", appointments_command))
-application.add_handler(CommandHandler("today", today_command))
-application.add_handler(CommandHandler("week", week_command))
-application.add_handler(CommandHandler("remind", remind_command))
-application.add_handler(CommandHandler("reschedule", reschedule_command))
-application.add_handler(CommandHandler("cancel", cancel_command))
-application.add_handler(CommandHandler("settings", settings_command))
+import time
+
+while True:  # Infinite loop for auto-restart
+    try:
+        print("🚀 Initializing Minigma Business Suite v2.0...")
+        print("📅 Comprehensive Appointment Scheduling System")
+        
+        # Create application - THIS LINE MUST BE INSIDE THE TRY BLOCK!
+        application = Application.builder().token(BOT_TOKEN).build()
+        
+        # ===== ADD SCHEDULING COMMAND HANDLERS =====
+        application.add_handler(CommandHandler("schedule", schedule_command))
+        application.add_handler(CommandHandler("calendar", calendar_command))
+        application.add_handler(CommandHandler("quickbook", quickbook_command))
+        application.add_handler(CommandHandler("appointments", appointments_command))
+        application.add_handler(CommandHandler("today", today_command))
+        application.add_handler(CommandHandler("week", week_command))
+        application.add_handler(CommandHandler("remind", remind_command))
+        application.add_handler(CommandHandler("reschedule", reschedule_command))
+        application.add_handler(CommandHandler("cancel", cancel_command))
+        application.add_handler(CommandHandler("settings", settings_command))
 
 # ===== ADD SCHEDULING CALLBACK HANDLERS =====
 # These handle button clicks for scheduling features
@@ -9677,6 +9677,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
