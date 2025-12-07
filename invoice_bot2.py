@@ -5,6 +5,7 @@ import os
 import logging
 import asyncio
 import sqlite3
+from dateutil import parser
 import io
 import time
 import requests
@@ -3729,6 +3730,16 @@ async def reschedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "📋 Use /appointments to view all appointments"
         )
         return APPOINTMENT_EDIT
+        # ==================================================
+# REMINDER COMMANDS  <--- ADD HERE
+# ==================================================
+
+async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set reminders for appointments"""
+    [your remind_command function code...]
+
+async def reminder_settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    [your reminder_settings_command function code...]
     
     keyboard = []
     for appt in appointments[:10]:  # Show first 10
@@ -5886,6 +5897,7 @@ def main():
             application.add_handler(CallbackQueryHandler(handle_booking_flow, pattern="^book_type_|^book_client_|^booking_|^select_"))
             application.add_handler(CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_|^week_|^month_|^today_"))
             application.add_handler(CallbackQueryHandler(view_appointment_details, pattern="^view_appt_"))
+            application.add_handler(CallbackQueryHandler(handle_reminder_callback, pattern="^reminder_|^toggle_reminder_|^set_reminder_"))
             application.add_handler(CallbackQueryHandler(toggle_appointment_reminder, pattern="^toggle_reminder_"))
 
             # ===== ADD EXISTING COMMAND HANDLERS =====
@@ -5908,6 +5920,7 @@ def main():
 
             # ===== ADD MEDIA HANDLERS =====
             application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
+            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reminder_times_input))
             application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name))
 
             print("✅ Bot initialized successfully!")
@@ -9575,6 +9588,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
