@@ -3701,44 +3701,44 @@ async def reschedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
     """Start appointment rescheduling process"""
     user_id = update.effective_user.id
     
-# Get upcoming appointments
-today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-next_month = today + timedelta(days=30)
-appointments = get_user_appointments(user_id, today, next_month, 'scheduled')
-
-if not appointments:
-    await update.message.reply_text(
-        "🔄 **Reschedule Appointment**\n\n"
-        "No upcoming appointments found to reschedule.\n\n"
-        "📅 Use /schedule to book new appointments\n"
-        "📋 Use /appointments to view all appointments"
-    )
-    return APPOINTMENT_EDIT
-
-keyboard = []
-for appt in appointments[:10]:  # Show first 10
-    appt_time = parser.parse(appt[5])
-    client_name = appt[12] if len(appt) > 12 else "Unknown"
-    title = appt[3] or "Meeting"
+    # Get upcoming appointments
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    next_month = today + timedelta(days=30)
+    appointments = get_user_appointments(user_id, today, next_month, 'scheduled')
+    
+    if not appointments:
+        await update.message.reply_text(
+            "🔄 **Reschedule Appointment**\n\n"
+            "No upcoming appointments found to reschedule.\n\n"
+            "📅 Use /schedule to book new appointments\n"
+            "📋 Use /appointments to view all appointments"
+        )
+        return APPOINTMENT_EDIT
+    
+    keyboard = []
+    for appt in appointments[:10]:  # Show first 10
+        appt_time = parser.parse(appt[5])
+        client_name = appt[12] if len(appt) > 12 else "Unknown"
+        title = appt[3] or "Meeting"
+        
+        keyboard.append([
+            InlineKeyboardButton(
+                f"📅 {appt_time.strftime('%b %d %H:%M')} - {title[:15]}", 
+                callback_data=f"reschedule_select_{appt[0]}"
+            )
+        ])  # <-- Don't forget this closing bracket!
     
     keyboard.append([
-        InlineKeyboardButton(
-            f"📅 {appt_time.strftime('%b %d %H:%M')} - {title[:15]}", 
-            callback_data=f"reschedule_select_{appt[0]}"
-        )
-    ])  # <-- THIS CLOSING BRACKET IS CRITICAL
-
-keyboard.append([
-    InlineKeyboardButton("❌ Cancel", callback_data="reschedule_cancel")
-])
-
-await update.message.reply_text(
-    "🔄 **Reschedule Appointment**\n\n"
-    "Select an appointment to reschedule:",
-    reply_markup=InlineKeyboardMarkup(keyboard)
-)
-
-return APPOINTMENT_EDIT
+        InlineKeyboardButton("❌ Cancel", callback_data="reschedule_cancel")
+    ])
+    
+    await update.message.reply_text(
+        "🔄 **Reschedule Appointment**\n\n"
+        "Select an appointment to reschedule:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+    
+    return APPOINTMENT_EDIT
 
 # ==================================================
 # PART 5: INVOICE, QUOTE & APPOINTMENT CREATION HANDLERS
@@ -9562,6 +9562,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
