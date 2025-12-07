@@ -2770,7 +2770,22 @@ def create_invoice_pdf(invoice_data, user_info):
 
 print("✅ Part 3 updated with comprehensive appointment PDF and email functionality!")
 
+
+
 # ==================================================
+# APPOINTMENT CREATION HANDLERS
+# ==================================================
+
+async def handle_appointment_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle appointment scheduling text input"""
+    user_id = update.effective_user.id
+    text = update.message.text
+    
+    if 'scheduling' not in context.user_data:
+        await update.message.reply_text("Please start with /schedule to begin appointment booking.")
+        return
+    
+    scheduling_data = context.user_data['scheduling']# ==================================================
 # PART 4: COMMAND HANDLERS (Updated with Scheduling)
 # ==================================================
 
@@ -3726,7 +3741,7 @@ async def reschedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 f"📅 {appt_time.strftime('%b %d %H:%M')} - {title[:15]}", 
                 callback_data=f"reschedule_select_{appt[0]}"
             )
-        ])  # <-- Don't forget this closing bracket!
+        ])
     
     keyboard.append([
         InlineKeyboardButton("❌ Cancel", callback_data="reschedule_cancel")
@@ -3967,19 +3982,15 @@ async def handle_quote_creation(update: Update, context: ContextTypes.DEFAULT_TY
     context.user_data['current_quote'] = quote_data
 
 # ==================================================
-# APPOINTMENT CREATION HANDLERS
+# APPOINTMENT CREATION HANDLER
 # ==================================================
 
 async def handle_appointment_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle appointment scheduling text input"""
+    """Handle appointment creation through conversation"""
     user_id = update.effective_user.id
     text = update.message.text
     
-    if 'scheduling' not in context.user_data:
-        await update.message.reply_text("Please start with /schedule to begin appointment booking.")
-        return
-    
-    scheduling_data = context.user_data['scheduling']
+    scheduling_data = context.user_data.get('scheduling', {})
     appointment_data = scheduling_data.get('appointment_data', {})
     step = scheduling_data.get('step')
     
@@ -4165,7 +4176,10 @@ async def show_appointment_confirmation(update, context):
             parse_mode='Markdown'
         )
 
-# Quote command
+# ==================================================
+# QUOTE COMMAND
+# ==================================================
+
 async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Start creating a new quote"""
     user_id = update.effective_user.id
@@ -4198,7 +4212,6 @@ async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Let's create a new quote! 📄{remaining_info}\n\n"
         "First, please enter the client name:"
     )
-
 # ==================================================
 # COMPREHENSIVE BUTTON HANDLER WITH SCHEDULING
 # ==================================================
@@ -9562,6 +9575,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
