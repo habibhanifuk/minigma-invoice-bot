@@ -5875,7 +5875,6 @@ def main():
         try:
             print("🚀 Initializing Minigma Business Suite v2.0...")
             print("📅 Comprehensive Appointment Scheduling System")
-            
             # Create application
             application = Application.builder().token(BOT_TOKEN).build()
             
@@ -9588,6 +9587,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
