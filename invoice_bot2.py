@@ -6411,49 +6411,49 @@ def main():
             # Create application
             application = Application.builder().token(BOT_TOKEN).build()
             
-            # ===== ADD SCHEDULING COMMAND HANDLERS =====
-            application.add_handler(CommandHandler("schedule", schedule_command))
-            application.add_handler(CommandHandler("calendar", calendar_command))
-            application.add_handler(CommandHandler("quickbook", quickbook_command))
-            application.add_handler(CommandHandler("appointments", appointments_command))
-            application.add_handler(CommandHandler("today", today_command))
-            application.add_handler(CommandHandler("week", week_command))
-            application.add_handler(CommandHandler("remind", remind_command))
-            application.add_handler(CommandHandler("reschedule", reschedule_command))
-            application.add_handler(CommandHandler("cancel", cancel_command))
-            application.add_handler(CommandHandler("settings", settings_command))
+# ===== ADD SCHEDULING COMMAND HANDLERS =====
+application.add_handler(CommandHandler("schedule", schedule_command))
+application.add_handler(CommandHandler("calendar", calendar_command))
+application.add_handler(CommandHandler("quickbook", quickbook_command))
+application.add_handler(CommandHandler("appointments", appointments_command))
+application.add_handler(CommandHandler("today", today_command))
+application.add_handler(CommandHandler("week", week_command))
+application.add_handler(CommandHandler("remind", remind_command))
+application.add_handler(CommandHandler("reschedule", reschedule_command))
+# application.add_handler(CommandHandler("cancel", cancel_command))  # TODO: Define cancel_command
+# application.add_handler(CommandHandler("settings", settings_command))  # TODO: Define settings_command
 
-            # ===== ADD SCHEDULING CALLBACK HANDLERS =====
-            application.add_handler(CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"))
-            application.add_handler(CallbackQueryHandler(handle_appointment_buttons, pattern="^book_|^view_|^toggle_|^schedule_"))
-            application.add_handler(CallbackQueryHandler(handle_booking_flow, pattern="^book_type_|^book_client_|^booking_|^select_"))
-            application.add_handler(CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_|^week_|^month_|^today_"))
-            application.add_handler(CallbackQueryHandler(view_appointment_details, pattern="^view_appt_"))
-            application.add_handler(CallbackQueryHandler(handle_reminder_callback, pattern="^reminder_|^toggle_reminder_|^set_reminder_"))
-            application.add_handler(CallbackQueryHandler(toggle_appointment_reminder, pattern="^toggle_reminder_"))
+# ===== ADD SCHEDULING CALLBACK HANDLERS =====
+application.add_handler(CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"))
+application.add_handler(CallbackQueryHandler(handle_appointment_buttons, pattern="^book_|^view_|^toggle_|^schedule_"))
+application.add_handler(CallbackQueryHandler(handle_booking_flow, pattern="^book_type_|^book_client_|^booking_|^select_"))
+application.add_handler(CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_|^week_|^month_|^today_"))
+application.add_handler(CallbackQueryHandler(view_appointment_details, pattern="^view_appt_"))
+application.add_handler(CallbackQueryHandler(handle_reminder_callback, pattern="^reminder_|^toggle_reminder_|^set_reminder_"))
+application.add_handler(CallbackQueryHandler(toggle_appointment_reminder, pattern="^toggle_reminder_"))
 
-            # ===== ADD EXISTING COMMAND HANDLERS =====
-            application.add_handler(CommandHandler("start", start))
-            application.add_handler(CommandHandler("logo", set_logo))
-            application.add_handler(CommandHandler("company", set_company_name))
-            application.add_handler(CommandHandler("create", create_invoice))
-            application.add_handler(CommandHandler("myinvoices", my_invoices_command))
-            application.add_handler(CommandHandler("premium", premium_command))
-            application.add_handler(CommandHandler("setup", setup_command))
-            application.add_handler(CommandHandler("clients", clients_command))
-            application.add_handler(CommandHandler("payments", payments_command))
-            application.add_handler(CommandHandler("help", help_command))
-            application.add_handler(CommandHandler("contact", contact_command))
-            application.add_handler(CommandHandler("myid", myid_command))
-            application.add_handler(CommandHandler("add_premium", add_premium_command))
-            application.add_handler(CommandHandler("remove_premium", remove_premium_command))
-            application.add_handler(CommandHandler("list_premium", list_premium_command))
-            application.add_handler(CommandHandler("debug", debug_command))
+# ===== ADD EXISTING COMMAND HANDLERS =====
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CommandHandler("logo", set_logo))
+application.add_handler(CommandHandler("company", set_company_name))
+application.add_handler(CommandHandler("create", create_invoice))
+application.add_handler(CommandHandler("myinvoices", my_invoices_command))
+application.add_handler(CommandHandler("premium", premium_command))
+application.add_handler(CommandHandler("setup", setup_command))
+application.add_handler(CommandHandler("clients", clients_command))
+application.add_handler(CommandHandler("payments", payments_command))
+application.add_handler(CommandHandler("help", help_command))
+application.add_handler(CommandHandler("contact", contact_command))
+application.add_handler(CommandHandler("myid", myid_command))
+application.add_handler(CommandHandler("add_premium", add_premium_command))
+application.add_handler(CommandHandler("remove_premium", remove_premium_command))
+application.add_handler(CommandHandler("list_premium", list_premium_command))
+application.add_handler(CommandHandler("debug", debug_command))
 
-            # ===== ADD MEDIA HANDLERS =====
-            application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
-            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reminder_times_input))
-            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name))
+# ===== ADD MEDIA HANDLERS =====
+application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name))
+# application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_reminder_times_input))  # Conflicts with handle_company_name
 
             print("✅ Bot initialized successfully!")
             print("🤖 Minigma Business Suite is running...")
@@ -10120,6 +10120,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
