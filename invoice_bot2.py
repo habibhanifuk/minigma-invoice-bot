@@ -3802,7 +3802,110 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def reminder_settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [your reminder_settings_command function code...]
-With this cleaned version:
+
+async def reminder_settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Configure global reminder settings"""
+    user_id = update.effective_user.id
+    
+    # Get current reminder settings
+    settings = get_reminder_settings(user_id)
+    
+    default_times = settings.get('default_reminder_times', [24, 2])
+    email_notifications = settings.get('email_notifications', True)
+    sms_notifications = settings.get('sms_notifications', False)
+    voice_call_reminders = settings.get('voice_call_reminders', False)
+    
+    message = "⚙️ **Reminder Settings**\n\n"
+    message += "Configure how and when you want to be reminded:\n\n"
+    
+    message += f"⏰ **Default Reminder Times:** {', '.join([f'{t}h before' for t in default_times])}\n"
+    message += f"📧 **Email Notifications:** {'✅ Enabled' if email_notifications else '❌ Disabled'}\n"
+    message += f"📱 **SMS Notifications:** {'✅ Enabled' if sms_notifications else '❌ Disabled'}\n"
+    message += f"📞 **Voice Call Reminders:** {'✅ Enabled' if voice_call_reminders else '❌ Disabled'}\n\n"
+    
+    message += "Customize your reminder preferences:"
+    
+    # Create settings keyboard
+    keyboard = [
+        [
+            InlineKeyboardButton("⏰ Set Default Times", callback_data="set_reminder_times"),
+            InlineKeyboardButton("📧 Toggle Email", callback_data="toggle_email_reminders")
+        ],
+        [
+            InlineKeyboardButton("📱 Toggle SMS", callback_data="toggle_sms_reminders"),
+            InlineKeyboardButton("📞 Toggle Calls", callback_data="toggle_call_reminders")
+        ],
+        [
+            InlineKeyboardButton("📊 Appointment Stats", callback_data="reminder_stats"),
+            InlineKeyboardButton("📋 View All Reminders", callback_data="view_all_reminders")
+        ],
+        [
+            InlineKeyboardButton("💾 Save Settings", callback_data="save_reminder_settings"),
+            InlineKeyboardButton("🔙 Back to Reminders", callback_data="back_to_reminders")
+        ]
+    ]
+    
+    if update.callback_query:
+        await update.callback_query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    else:
+        await update.message.reply_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+
+def get_reminder_settings(user_id: int):
+    """Get user's reminder settings from database"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT reminder_settings FROM users WHERE user_id = ?
+    ''', (user_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result and result[0]:
+        try:
+            import json
+            return json.loads(result[0])
+        except:
+            return {}
+    
+    # Return default settings
+    return {
+        'default_reminder_times': [24, 2],  # 24 hours and 2 hours before
+        'email_notifications': True,
+        'sms_notifications': False,
+        'voice_call_reminders': False,
+        'timezone': 'UTC'
+    }
+
+def save_reminder_settings(user_id: int, settings: dict):
+    """Save user's reminder settings to database"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    try:
+        import json
+        settings_json = json.dumps(settings)
+        
+        cursor.execute('''
+            UPDATE users SET reminder_settings = ? WHERE user_id = ?
+        ''', (settings_json, user_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error saving reminder settings: {e}")
+        return False
+    finally:
+        conn.close()
 
 python
 # ==================================================
@@ -9912,6 +10015,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
