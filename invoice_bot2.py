@@ -6397,7 +6397,6 @@ async def send_daily_schedule(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in daily schedule system: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send welcome message when the command /start is issued"""
     user_id = update.effective_user.id
     username = update.effective_user.username or update.effective_user.first_name
@@ -10111,6 +10110,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
