@@ -3730,7 +3730,7 @@ async def reschedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
             "📋 Use /appointments to view all appointments"
         )
         return APPOINTMENT_EDIT
-        # ==================================================
+# ==================================================
 # REMINDER COMMANDS  <--- ADD HERE
 # ==================================================
 
@@ -3740,31 +3740,294 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def reminder_settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [your reminder_settings_command function code...]
+With this cleaned version:
+
+python
+# ==================================================
+# REMINDER COMMANDS
+# ==================================================
+
+async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Set reminders for appointments"""
+    user_id = update.effective_user.id
+    
+    # Get upcoming appointments
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    next_week = today + timedelta(days=7)
+    appointments = get_user_appointments(user_id, today, next_week, 'scheduled')
+    
+    if not appointments:
+        await update.message.reply_text(
+            "⏰ **Set Reminders**\n\n"
+            "No upcoming appointments found to set reminders for.\n\n"
+            "📅 Use /schedule to book appointments\n"
+            "📋 Use /appointments to view upcoming appointments"
+        )
+        return
+    
+    # Show appointments with reminder status
+    message = "⏰ **Set Appointment Reminders**\n\n"
+    message += "You can set reminders for your upcoming appointments:\n\n"
     
     keyboard = []
-    for appt in appointments[:10]:  # Show first 10
+    for appt in appointments[:8]:  # Show first 8 appointments
+        appt_id = appt[0]
         appt_time = parser.parse(appt[5])
         client_name = appt[12] if len(appt) > 12 else "Unknown"
         title = appt[3] or "Meeting"
         
+        # Check if reminder is already set
+        has_reminder = appt[9] if len(appt) > 9 else False
+        
+        reminder_status = "✅ Enabled" if has_reminder else "❌ Disabled"
+        
+        message += (
+            f"📅 **{appt_time.strftime('%a %d %b %H:%M')}** - {title}\n"
+            f"   👤 {client_name}\n"
+            f"   ⏰ Reminder: {reminder_status}\n\n"
+        )
+        
+        # Create toggle button
+        toggle_text = "🔕 Disable" if has_reminder else "🔔 Enable"
         keyboard.append([
             InlineKeyboardButton(
-                f"📅 {appt_time.strftime('%b %d %H:%M')} - {title[:15]}", 
-                callback_data=f"reschedule_select_{appt[0]}"
+                f"{toggle_text} - {appt_time.strftime('%H:%M')} {title[:10]}", 
+                callback_data=f"toggle_reminder_{appt_id}"
             )
         ])
     
+    # Add global reminder settings button
     keyboard.append([
-        InlineKeyboardButton("❌ Cancel", callback_data="reschedule_cancel")
+        InlineKeyboardButton("⚙️ Global Reminder Settings", callback_data="reminder_settings"),
+        InlineKeyboardButton("📅 View Calendar", callback_data="reminder_view_calendar")
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton("✅ Save All Settings", callback_data="reminder_save_all"),
+        InlineKeyboardButton("❌ Cancel", callback_data="reminder_cancel")
     ])
     
     await update.message.reply_text(
-        "🔄 **Reschedule Appointment**\n\n"
-        "Select an appointment to reschedule:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
     )
+
+async def handle_reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle reminder-related callback queries"""
+    query = update.callback_query
+    await query.answer()
     
-    return APPOINTMENT_EDIT
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data == "reminder_settings":
+        # Get current settings and show them
+        settings = get_reminder_settings(user_id)
+        default_times = settings.get('default_reminder_times', [24, 2])
+        email_notifications = settings.get('email_notifications', True)
+        sms_notifications = settings.get('sms_notifications', False)
+        voice_call_reminders = settings.get('voice_call_reminders', False)
+        
+        message = "⚙️ **Reminder Settings**\n\n"
+        message += f"⏰ **Default Reminder Times:** {', '.join([f'{t}h before' for t in default_times])}\n"
+        message += f"📧 **Email Notifications:** {'✅ Enabled' if email_notifications else '❌ Disabled'}\n"
+        message += f"📱 **SMS Notifications:** {'✅ Enabled' if sms_notifications else '❌ Disabled'}\n"
+        message += f"📞 **Voice Call Reminders:** {'✅ Enabled' if voice_call_reminders else '❌ Disabled'}\n\n"
+        message += "Customize your reminder preferences:"
+        
+        keyboard = [
+            [
+                InlineKeyboardButton("⏰ Set Default Times", callback_data="set_reminder_times"),
+                InlineKeyboardButton("📧 Toggle Email", callback_data="toggle_email_reminders")
+            ],
+            [
+                InlineKeyboardButton("📱 Toggle SMS", callback_data="toggle_sms_reminders"),
+                InlineKeyboardButton("📞 Toggle Calls", callback_data="toggle_call_reminders")
+            ],
+            [
+                InlineKeyboardButton("💾 Save Settings", callback_data="save_reminder_settings"),
+                InlineKeyboardButton("🔙 Back to Reminders", callback_data="back_to_reminders")
+            ]
+        ]
+        
+        await query.edit_message_text(
+            message,
+            reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode='Markdown'
+        )
+    
+    elif data.startswith("toggle_reminder_"):
+        # Extract appointment ID
+        appointment_id = int(data.split("_")[2])
+        
+        # Toggle reminder for this appointment
+        await toggle_appointment_reminder(query, appointment_id)
+        
+        # Refresh the reminder list
+        await remind_command(update, context)
+    
+    elif data == "set_reminder_times":
+        # Ask user to set default reminder times
+        await query.edit_message_text(
+            "⏰ **Set Default Reminder Times**\n\n"
+            "Please enter the reminder times (in hours before appointment).\n"
+            "You can specify multiple times separated by commas.\n\n"
+            "Example: 24, 2, 0.5 (for 24h, 2h, and 30min before)\n\n"
+            "Current times: 24, 2\n\n"
+            "Enter new times:"
+        )
+        
+        # Store that we're awaiting reminder times
+        context.user_data['awaiting_reminder_times'] = True
+        context.user_data['reminder_settings_step'] = 'set_times'
+    
+    elif data == "toggle_email_reminders":
+        # Toggle email notifications
+        settings = get_reminder_settings(user_id)
+        settings['email_notifications'] = not settings.get('email_notifications', True)
+        save_reminder_settings(user_id, settings)
+        
+        await query.answer(f"Email reminders {'enabled' if settings['email_notifications'] else 'disabled'}")
+        await handle_reminder_callback(update, context)
+    
+    elif data == "toggle_sms_reminders":
+        # Toggle SMS notifications
+        settings = get_reminder_settings(user_id)
+        settings['sms_notifications'] = not settings.get('sms_notifications', False)
+        save_reminder_settings(user_id, settings)
+        
+        await query.answer(f"SMS reminders {'enabled' if settings['sms_notifications'] else 'disabled'}")
+        await handle_reminder_callback(update, context)
+    
+    elif data == "toggle_call_reminders":
+        # Toggle voice call reminders
+        settings = get_reminder_settings(user_id)
+        settings['voice_call_reminders'] = not settings.get('voice_call_reminders', False)
+        save_reminder_settings(user_id, settings)
+        
+        await query.answer(f"Voice call reminders {'enabled' if settings['voice_call_reminders'] else 'disabled'}")
+        await handle_reminder_callback(update, context)
+    
+    elif data == "save_reminder_settings":
+        # Save all settings
+        await query.answer("✅ Reminder settings saved!")
+        await query.edit_message_text(
+            "✅ **Reminder Settings Saved**\n\n"
+            "Your reminder preferences have been updated.\n\n"
+            "Use /remind to manage individual appointment reminders.",
+            parse_mode='Markdown'
+        )
+    
+    elif data == "back_to_reminders":
+        # Go back to main reminder menu
+        await remind_command(update, context)
+    
+    elif data == "reminder_view_calendar":
+        await calendar_command(update, context)
+    
+    elif data in ["reminder_save_all", "reminder_cancel", "reminder_stats", "view_all_reminders"]:
+        await query.answer("This feature is coming soon!")
+    
+    else:
+        await query.answer("Reminder feature coming soon!")
+
+async def handle_reminder_times_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle user input for reminder times"""
+    if not context.user_data.get('awaiting_reminder_times'):
+        return
+    
+    user_id = update.effective_user.id
+    text = update.message.text
+    
+    try:
+        # Parse comma-separated times
+        times = [float(t.strip()) for t in text.split(',')]
+        
+        # Validate times (should be positive numbers)
+        if any(t < 0 for t in times):
+            await update.message.reply_text(
+                "❌ Please enter positive numbers only.\n"
+                "Example: 24, 2, 0.5\n\n"
+                "Try again:"
+            )
+            return
+        
+        # Sort times in descending order
+        times.sort(reverse=True)
+        
+        # Save to user settings
+        settings = get_reminder_settings(user_id)
+        settings['default_reminder_times'] = times
+        save_reminder_settings(user_id, settings)
+        
+        # Clear the flag
+        del context.user_data['awaiting_reminder_times']
+        del context.user_data['reminder_settings_step']
+        
+        await update.message.reply_text(
+            f"✅ **Reminder times updated!**\n\n"
+            f"New reminder times: {', '.join([f'{t}h before' for t in times])}\n\n"
+            f"These will be applied to new appointments.\n"
+            f"Use /remind to update existing appointments."
+        )
+        
+    except ValueError:
+        await update.message.reply_text(
+            "❌ Invalid format. Please enter numbers separated by commas.\n"
+            "Example: 24, 2, 0.5\n\n"
+            "Try again:"
+        )
+
+# Helper functions for reminders
+def get_reminder_settings(user_id: int):
+    """Get user's reminder settings from database"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT reminder_settings FROM users WHERE user_id = ?
+    ''', (user_id,))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result and result[0]:
+        try:
+            import json
+            return json.loads(result[0])
+        except:
+            return {}
+    
+    # Return default settings
+    return {
+        'default_reminder_times': [24, 2],  # 24 hours and 2 hours before
+        'email_notifications': True,
+        'sms_notifications': False,
+        'voice_call_reminders': False,
+        'timezone': 'UTC'
+    }
+
+def save_reminder_settings(user_id: int, settings: dict):
+    """Save user's reminder settings to database"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    try:
+        import json
+        settings_json = json.dumps(settings)
+        
+        cursor.execute('''
+            UPDATE users SET reminder_settings = ? WHERE user_id = ?
+        ''', (settings_json, user_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error saving reminder settings: {e}")
+        return False
+    finally:
+        conn.close()
 
 # ==================================================
 # PART 5: INVOICE, QUOTE & APPOINTMENT CREATION HANDLERS
@@ -9587,6 +9850,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
