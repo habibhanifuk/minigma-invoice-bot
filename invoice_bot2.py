@@ -6397,6 +6397,7 @@ async def send_daily_schedule(context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"Error in daily schedule system: {e}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Send welcome message when the command /start is issued"""
     user_id = update.effective_user.id
     username = update.effective_user.username or update.effective_user.first_name
@@ -6411,16 +6412,15 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         welcome_msg = f"👋 Welcome back, {username}!\n\n"
     
-    welcome_msg += """
-🚀 **Minigma Business Suite v2.0**
+    welcome_msg += """🚀 **Minigma Business Suite v2.0**
 *Your all-in-one business management solution*
 
 📋 **Core Features:**
-• 📄 Create professional invoices & quotes
-• 📅 Schedule appointments & manage calendar
-• 👥 Client database management
-• 💰 Payment tracking
-• 📊 Business analytics
+• Create professional invoices & quotes
+• Schedule appointments & manage calendar
+• Client database management
+• Payment tracking
+• Business analytics
 
 ⚡ **Quick Commands:**
 /create - Create new invoice
@@ -6438,8 +6438,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 • Advanced analytics
 • Priority support
 
-📞 **Support:** @MinigmaSupport
-"""
+📞 **Support:** @MinigmaSupport"""
     
     keyboard = [
         [
@@ -6463,82 +6462,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=reply_markup,
         parse_mode='Markdown'
     )
-    
-
-def main():
-    """Main function with enhanced scheduling features"""
-    # Create necessary directories
-    os.makedirs('logos', exist_ok=True)
-    os.makedirs('invoices', exist_ok=True)
-    os.makedirs('appointments', exist_ok=True)
-    os.makedirs('calendar_exports', exist_ok=True)
-    
-    while True:  # Infinite loop for auto-restart
-        try:
-            print("🚀 Initializing Minigma Business Suite v2.0...")
-            print("📅 Comprehensive Appointment Scheduling System")
-            # Create application
-            application = Application.builder().token(BOT_TOKEN).build()
-            
-            # ===== ADD SCHEDULING COMMAND HANDLERS =====
-            application.add_handler(CommandHandler("schedule", schedule_command))
-            application.add_handler(CommandHandler("calendar", calendar_command))
-            application.add_handler(CommandHandler("quickbook", quickbook_command))
-            application.add_handler(CommandHandler("appointments", appointments_command))
-            application.add_handler(CommandHandler("today", today_command))
-            application.add_handler(CommandHandler("week", week_command))
-            application.add_handler(CommandHandler("remind", remind_command))
-            application.add_handler(CommandHandler("reschedule", reschedule_command))
-            # application.add_handler(CommandHandler("cancel", cancel_command))
-            # application.add_handler(CommandHandler("settings", settings_command))
-
-            # ===== ADD SCHEDULING CALLBACK HANDLERS =====
-            application.add_handler(CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"))
-            application.add_handler(CallbackQueryHandler(handle_appointment_buttons, pattern="^book_|^view_|^toggle_|^schedule_"))
-            application.add_handler(CallbackQueryHandler(handle_booking_flow, pattern="^book_type_|^book_client_|^booking_|^select_"))
-            application.add_handler(CallbackQueryHandler(handle_calendar_navigation, pattern="^calendar_|^week_|^month_|^today_"))
-            application.add_handler(CallbackQueryHandler(view_appointment_details, pattern="^view_appt_"))
-            application.add_handler(CallbackQueryHandler(handle_reminder_callback, pattern="^reminder_|^toggle_reminder_|^set_reminder_"))
-            application.add_handler(CallbackQueryHandler(toggle_appointment_reminder, pattern="^toggle_reminder_"))
-
-            # ===== ADD EXISTING COMMAND HANDLERS =====
-            application.add_handler(CommandHandler("start", start))
-            application.add_handler(CommandHandler("logo", set_logo))
-            application.add_handler(CommandHandler("company", set_company_name))
-            application.add_handler(CommandHandler("create", create_invoice))
-            application.add_handler(CommandHandler("myinvoices", my_invoices_command))
-            application.add_handler(CommandHandler("premium", premium_command))
-            application.add_handler(CommandHandler("setup", setup_command))
-            application.add_handler(CommandHandler("clients", clients_command))
-            application.add_handler(CommandHandler("payments", payments_command))
-            application.add_handler(CommandHandler("help", help_command))
-            application.add_handler(CommandHandler("contact", contact_command))
-            application.add_handler(CommandHandler("myid", myid_command))
-            application.add_handler(CommandHandler("add_premium", add_premium_command))
-            application.add_handler(CommandHandler("remove_premium", remove_premium_command))
-            application.add_handler(CommandHandler("list_premium", list_premium_command))
-            application.add_handler(CommandHandler("debug", debug_command))
-
-            # ===== ADD MEDIA HANDLERS =====
-            application.add_handler(MessageHandler(filters.PHOTO, handle_logo))
-            application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_company_name))
-
-            print("✅ Bot initialized successfully!")
-            print("🤖 Minigma Business Suite is running...")
-            print("🔄 Press Ctrl+C to stop")
-            
-            application.run_polling(allowed_updates=Update.ALL_TYPES)
-            
-        except Exception as e:
-            print(f"❌ Bot crashed: {e}")
-            import traceback
-            traceback.print_exc()
-            print("🔄 Auto-restarting in 15 seconds...")
-            time.sleep(15)
-            continue
-
-if __name__ == '__main__':
-    main()
     
 # ==================================================
 # PART 7: EMAIL AND SMS DELIVERY (Updated with Appointment Features)
@@ -10188,6 +10111,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
