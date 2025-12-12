@@ -6396,6 +6396,75 @@ async def send_daily_schedule(context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Error in daily schedule system: {e}")
 
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Send welcome message when the command /start is issued"""
+    user_id = update.effective_user.id
+    username = update.effective_user.username or update.effective_user.first_name
+    
+    # Check if user exists, create if not
+    user = get_user(user_id)
+    if not user:
+        create_user(user_id, update.effective_user.username, 
+                   update.effective_user.first_name, update.effective_user.last_name)
+        user = get_user(user_id)
+        welcome_msg = f"🎉 Welcome to Minigma Business Suite, {username}!\n\n"
+    else:
+        welcome_msg = f"👋 Welcome back, {username}!\n\n"
+    
+    welcome_msg += """
+🚀 **Minigma Business Suite v2.0**
+*Your all-in-one business management solution*
+
+📋 **Core Features:**
+• 📄 Create professional invoices & quotes
+• 📅 Schedule appointments & manage calendar
+• 👥 Client database management
+• 💰 Payment tracking
+• 📊 Business analytics
+
+⚡ **Quick Commands:**
+/create - Create new invoice
+/quote - Create quote
+/schedule - Book appointment
+/appointments - View appointments
+/clients - Manage clients
+/payments - Track payments
+/help - Get help
+
+💎 **Premium Features Available:**
+• Unlimited invoices
+• VAT calculation
+• Email/SMS notifications
+• Advanced analytics
+• Priority support
+
+📞 **Support:** @MinigmaSupport
+"""
+    
+    keyboard = [
+        [
+            InlineKeyboardButton("📄 Create Invoice", callback_data="start_create"),
+            InlineKeyboardButton("📅 Schedule", callback_data="start_schedule")
+        ],
+        [
+            InlineKeyboardButton("👥 Clients", callback_data="start_clients"),
+            InlineKeyboardButton("💰 Payments", callback_data="start_payments")
+        ],
+        [
+            InlineKeyboardButton("⚙️ Setup", callback_data="start_setup"),
+            InlineKeyboardButton("💎 Premium", callback_data="start_premium")
+        ]
+    ]
+    
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await update.message.reply_text(
+        welcome_msg,
+        reply_markup=reply_markup,
+        parse_mode='Markdown'
+    )
+    
+
 def main():
     """Main function with enhanced scheduling features"""
     # Create necessary directories
@@ -10119,6 +10188,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
