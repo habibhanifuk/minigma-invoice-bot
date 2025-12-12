@@ -5,7 +5,6 @@ import os
 import logging
 import asyncio
 import sqlite3
-from dateutil import parser
 import io
 import time
 import requests
@@ -16,14 +15,14 @@ import threading
 from datetime import datetime, timedelta, date
 from typing import Dict, List, Optional, Tuple
 from enum import Enum
-from dateutil import parser
-import pytz
-from flask import Flask
 from threading import Thread, Timer
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
 
+import pytz
+from flask import Flask
+from dateutil import parser
 from telegram import (
     Update, InlineKeyboardButton, InlineKeyboardMarkup, 
     BotCommand, ReplyKeyboardMarkup, KeyboardButton, 
@@ -146,7 +145,7 @@ async def setup_bot_commands(application):
     
     await application.bot.set_my_commands(commands)
     print("✅ Bot commands menu has been set up with scheduling!")
-    
+
 # Database setup - COMPREHENSIVE VERSION WITH SCHEDULING
 def init_db():
     conn = sqlite3.connect('invoices.db')
@@ -548,6 +547,7 @@ print("✅ Scheduling system imports and setup complete!")
 
 # Date parsing function - MOVED TO TOP
 def parse_trial_end_date(trial_end_date_str):
+    """Parse trial end date string to datetime object"""
     if not trial_end_date_str:
         return datetime.now()
     
@@ -575,6 +575,7 @@ def parse_trial_end_date(trial_end_date_str):
 
 # Database helper functions
 def get_user(user_id):
+    """Get user by ID"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
@@ -583,6 +584,7 @@ def get_user(user_id):
     return user
 
 def create_user(user_id, username, first_name, last_name):
+    """Create a new user with trial period and initialize scheduling defaults"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     
@@ -604,6 +606,7 @@ def create_user(user_id, username, first_name, last_name):
     conn.close()
 
 def update_user_company_info(user_id, logo_path=None, company_name=None, company_reg=None, vat_reg=None):
+    """Update user's company information"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     if logo_path:
@@ -618,6 +621,7 @@ def update_user_company_info(user_id, logo_path=None, company_name=None, company
     conn.close()
 
 def get_invoice_counter(user_id):
+    """Get current invoice counter for user"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('SELECT current_counter FROM invoice_counters WHERE user_id = ?', (user_id,))
@@ -632,6 +636,7 @@ def get_invoice_counter(user_id):
     return counter
 
 def increment_invoice_counter(user_id):
+    """Increment invoice counter for user"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('UPDATE invoice_counters SET current_counter = current_counter + 1 WHERE user_id = ?', (user_id,))
@@ -639,9 +644,10 @@ def increment_invoice_counter(user_id):
     conn.close()
 
 def save_invoice_draft(user_id, client_name, invoice_date, currency, items, vat_enabled=False, client_email=None, client_phone=None):
+    """Save invoice draft to database"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
-    items_json = str(items)
+    items_json = json.dumps(items)  # Use json.dumps instead of str() for proper serialization
     
     # Calculate totals
     subtotal = sum(item['quantity'] * item['amount'] for item in items)
@@ -666,6 +672,7 @@ def save_invoice_draft(user_id, client_name, invoice_date, currency, items, vat_
     return invoice_id
 
 def update_invoice_status(invoice_id, status, invoice_number=None):
+    """Update invoice status and optionally assign invoice number"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     if invoice_number:
@@ -680,6 +687,7 @@ def update_invoice_status(invoice_id, status, invoice_number=None):
     conn.close()
 
 def mark_invoice_paid(invoice_id):
+    """Mark invoice as paid"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('UPDATE invoices SET paid_status = TRUE WHERE invoice_id = ?', (invoice_id,))
@@ -687,11 +695,23 @@ def mark_invoice_paid(invoice_id):
     conn.close()
 
 def get_invoice(invoice_id):
+    """Get invoice by ID"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM invoices WHERE invoice_id = ?', (invoice_id,))
     invoice = cursor.fetchone()
     conn.close()
+    
+    if invoice:
+        # Parse items JSON back to Python object
+        if len(invoice) > 5 and invoice[5]:  # items column
+            try:
+                # Create a mutable list version to modify items
+                invoice_list = list(invoice)
+                invoice_list[5] = json.loads(invoice[5]) if isinstance(invoice[5], str) else invoice[5]
+                invoice = tuple(invoice_list)
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse items JSON for invoice {invoice_id}")
     
     print(f"DEBUG: Getting invoice {invoice_id} - Found: {invoice is not None}")
     if invoice:
@@ -700,6 +720,7 @@ def get_invoice(invoice_id):
     return invoice
 
 def get_user_invoices(user_id, client_name=None):
+    """Get user's approved invoices"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     if client_name:
@@ -715,10 +736,25 @@ def get_user_invoices(user_id, client_name=None):
             ORDER BY created_at DESC
         ''', (user_id,))
     invoices = cursor.fetchall()
+    
+    # Parse items JSON for each invoice
+    parsed_invoices = []
+    for invoice in invoices:
+        if len(invoice) > 5 and invoice[5]:  # items column
+            try:
+                invoice_list = list(invoice)
+                invoice_list[5] = json.loads(invoice[5]) if isinstance(invoice[5], str) else invoice[5]
+                parsed_invoices.append(tuple(invoice_list))
+            except json.JSONDecodeError:
+                parsed_invoices.append(invoice)
+        else:
+            parsed_invoices.append(invoice)
+    
     conn.close()
-    return invoices
+    return parsed_invoices
 
 def get_unpaid_invoices(user_id):
+    """Get user's unpaid approved invoices"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('''
@@ -727,10 +763,25 @@ def get_unpaid_invoices(user_id):
         ORDER BY created_at DESC
     ''', (user_id,))
     invoices = cursor.fetchall()
+    
+    # Parse items JSON for each invoice
+    parsed_invoices = []
+    for invoice in invoices:
+        if len(invoice) > 5 and invoice[5]:
+            try:
+                invoice_list = list(invoice)
+                invoice_list[5] = json.loads(invoice[5]) if isinstance(invoice[5], str) else invoice[5]
+                parsed_invoices.append(tuple(invoice_list))
+            except json.JSONDecodeError:
+                parsed_invoices.append(invoice)
+        else:
+            parsed_invoices.append(invoice)
+    
     conn.close()
-    return invoices
+    return parsed_invoices
 
 def get_user_invoice_count_this_month(user_id):
+    """Count user's approved invoices for current month"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     first_day_of_month = datetime.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -743,6 +794,7 @@ def get_user_invoice_count_this_month(user_id):
     return count
 
 def save_client(user_id, client_name, email=None, phone=None, address=None):
+    """Save new client"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('''
@@ -755,6 +807,7 @@ def save_client(user_id, client_name, email=None, phone=None, address=None):
     return client_id
 
 def update_client(client_id, client_name=None, email=None, phone=None, address=None):
+    """Update existing client information"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     
@@ -784,6 +837,7 @@ def update_client(client_id, client_name=None, email=None, phone=None, address=N
     conn.close()
 
 def get_user_clients(user_id):
+    """Get all clients for a user"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM clients WHERE user_id = ? ORDER BY client_name', (user_id,))
@@ -792,6 +846,7 @@ def get_user_clients(user_id):
     return clients
 
 def get_client_by_id(client_id):
+    """Get client by ID"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM clients WHERE client_id = ?', (client_id,))
@@ -800,6 +855,7 @@ def get_client_by_id(client_id):
     return client
 
 def get_client_by_name(user_id, client_name):
+    """Get client by name for specific user"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     cursor.execute('SELECT * FROM clients WHERE user_id = ? AND client_name = ?', (user_id, client_name))
@@ -838,6 +894,7 @@ def is_premium_user(user_id):
     return False  # Trial expired
 
 def add_premium_subscription(user_id, subscription_type, months=1):
+    """Add premium subscription for user"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     start_date = datetime.now()
@@ -851,7 +908,6 @@ def add_premium_subscription(user_id, subscription_type, months=1):
     cursor.execute('UPDATE users SET subscription_tier = ? WHERE user_id = ?', ('premium', user_id))
     conn.commit()
     conn.close()
-
 # ==================================================
 # NEW APPOINTMENT SCHEDULING HELPER FUNCTIONS
 # ==================================================
@@ -864,23 +920,40 @@ def create_appointment(user_id, client_id, title, appointment_date, duration_min
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     
+    # Ensure appointment_date is a string if it's a datetime object
+    if isinstance(appointment_date, datetime):
+        appointment_date_str = appointment_date.strftime('%Y-%m-%d %H:%M:%S')
+    else:
+        appointment_date_str = str(appointment_date)
+    
     cursor.execute('''
         INSERT INTO appointments 
         (user_id, client_id, title, description, appointment_date, duration_minutes,
          appointment_type, status, reminder_minutes_before)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (user_id, client_id, title, description, appointment_date, duration_minutes,
+    ''', (user_id, client_id, title, description, appointment_date_str, duration_minutes,
           appointment_type, status, reminder_minutes_before))
     
     appointment_id = cursor.lastrowid
     
     # Create reminder record if needed
     if reminder_minutes_before > 0:
-        reminder_time = appointment_date - timedelta(minutes=reminder_minutes_before)
+        # Ensure we have a datetime object for calculation
+        if isinstance(appointment_date, datetime):
+            appt_dt = appointment_date
+        else:
+            try:
+                appt_dt = parser.parse(appointment_date_str)
+            except:
+                appt_dt = datetime.now() + timedelta(days=1)
+        
+        reminder_time = appt_dt - timedelta(minutes=reminder_minutes_before)
+        reminder_time_str = reminder_time.strftime('%Y-%m-%d %H:%M:%S')
+        
         cursor.execute('''
             INSERT INTO appointment_reminders (appointment_id, user_id, reminder_time, reminder_type)
             VALUES (?, ?, ?, 'telegram')
-        ''', (appointment_id, user_id, reminder_time))
+        ''', (appointment_id, user_id, reminder_time_str))
     
     conn.commit()
     conn.close()
@@ -900,6 +973,9 @@ def update_appointment(appointment_id, **kwargs):
     for field, value in kwargs.items():
         if field in ['title', 'description', 'appointment_date', 'duration_minutes',
                     'appointment_type', 'status', 'reminder_minutes_before', 'cancellation_reason']:
+            # Convert datetime to string for database storage
+            if field == 'appointment_date' and isinstance(value, datetime):
+                value = value.strftime('%Y-%m-%d %H:%M:%S')
             updates.append(f"{field} = ?")
             params.append(value)
     
@@ -921,14 +997,22 @@ def update_appointment(appointment_id, **kwargs):
             result = cursor.fetchone()
             
             if result:
-                appointment_date, reminder_minutes = result
+                appointment_date_str, reminder_minutes = result
+                
+                # Parse appointment date string to datetime
+                try:
+                    appointment_date = parser.parse(appointment_date_str)
+                except:
+                    appointment_date = datetime.now()
+                
                 reminder_time = appointment_date - timedelta(minutes=reminder_minutes)
+                reminder_time_str = reminder_time.strftime('%Y-%m-%d %H:%M:%S')
                 
                 cursor.execute('''
                     UPDATE appointment_reminders 
                     SET reminder_time = ?, sent = FALSE 
                     WHERE appointment_id = ?
-                ''', (reminder_time, appointment_id))
+                ''', (reminder_time_str, appointment_id))
     
     conn.commit()
     conn.close()
@@ -957,10 +1041,16 @@ def get_user_appointments(user_id, start_date=None, end_date=None, status='sched
     params = [user_id, status]
     
     if start_date:
+        # Ensure start_date is in proper format
+        if isinstance(start_date, datetime):
+            start_date = start_date.strftime('%Y-%m-%d %H:%M:%S')
         query += ' AND a.appointment_date >= ?'
         params.append(start_date)
     
     if end_date:
+        # Ensure end_date is in proper format
+        if isinstance(end_date, datetime):
+            end_date = end_date.strftime('%Y-%m-%d %H:%M:%S')
         query += ' AND a.appointment_date <= ?'
         params.append(end_date)
     
@@ -999,26 +1089,42 @@ def cancel_appointment(appointment_id, reason=""):
     conn.close()
     return True
 
-def reschedule_appointment(appointment_id, new_date, new_time):
+def reschedule_appointment(appointment_id, new_date, new_time=None):
     """Reschedule an appointment to new date/time"""
-    if isinstance(new_date, str):
-        new_date = parser.parse(new_date)
-    
     appointment = get_appointment(appointment_id)
     if not appointment:
         return False
     
-    # Combine date and time
-    appointment_date = parser.parse(appointment[5])  # appointment_date field
-    new_datetime = new_date.replace(
-        hour=appointment_date.hour,
-        minute=appointment_date.minute
-    )
+    # Get existing appointment datetime
+    appointment_date_str = appointment[5]  # appointment_date field
+    try:
+        appointment_date = parser.parse(appointment_date_str)
+    except:
+        appointment_date = datetime.now()
     
+    # Create new datetime
+    if isinstance(new_date, str):
+        new_date = parser.parse(new_date)
+    
+    # If new_time is provided, use it
     if new_time:
-        new_datetime = new_datetime.replace(
-            hour=new_time.hour,
-            minute=new_time.minute
+        if isinstance(new_time, str):
+            try:
+                time_obj = datetime.strptime(new_time, '%H:%M').time()
+                new_datetime = datetime.combine(new_date.date(), time_obj)
+            except:
+                new_datetime = new_date
+        elif isinstance(new_time, datetime):
+            new_datetime = datetime.combine(new_date.date(), new_time.time())
+        else:
+            new_datetime = new_date
+    else:
+        # Keep the same time, just change the date
+        new_datetime = new_date.replace(
+            hour=appointment_date.hour,
+            minute=appointment_date.minute,
+            second=0,
+            microsecond=0
         )
     
     return update_appointment(appointment_id, 
@@ -1050,7 +1156,10 @@ def get_appointment_types(user_id):
                 dt[4] if len(dt) > 4 else '#4a6ee0',  # color_hex
                 dt[2],  # duration_minutes
                 0.00,   # price
-                dt[3] if len(dt) > 3 else ''  # description
+                dt[3] if len(dt) > 3 else '',  # description
+                0,      # buffer_before (placeholder)
+                0,      # buffer_after (placeholder)
+                True    # is_active (placeholder)
             ))
         conn.close()
         return types
@@ -1121,6 +1230,12 @@ def update_working_hours(user_id, day_of_week, is_working_day=True, start_time=N
 
 def is_working_day(user_id, date):
     """Check if a specific date is a working day"""
+    if isinstance(date, str):
+        try:
+            date = parser.parse(date)
+        except:
+            date = datetime.now()
+    
     day_of_week = date.weekday()  # 0=Monday, 6=Sunday
     hours = get_working_hours(user_id)
     
@@ -1132,6 +1247,12 @@ def is_working_day(user_id, date):
 
 def get_available_slots(user_id, date, duration_minutes=60):
     """Get available time slots for a specific date"""
+    if isinstance(date, str):
+        try:
+            date = parser.parse(date)
+        except:
+            date = datetime.now()
+    
     if not is_working_day(user_id, date):
         return []
     
@@ -1149,26 +1270,36 @@ def get_available_slots(user_id, date, duration_minutes=60):
             day_hours = h
             break
     
-    if not day_hours or not day_hours[4] or not day_hours[5]:  # start_time, end_time
+    if not day_hours or not day_hours[3]:  # is_working_day
+        return []
+    
+    if not day_hours[4] or not day_hours[5]:  # start_time, end_time
         return []
     
     # Parse working hours
-    work_start = datetime.strptime(day_hours[4], '%H:%M').time()
-    work_end = datetime.strptime(day_hours[5], '%H:%M').time()
+    try:
+        work_start = datetime.strptime(day_hours[4], '%H:%M').time()
+        work_end = datetime.strptime(day_hours[5], '%H:%M').time()
+    except ValueError:
+        return []
     
     # Generate slots
     slot_duration = timedelta(minutes=duration_minutes)
-    current_time = datetime.combine(date, work_start)
-    end_time = datetime.combine(date, work_end)
+    current_time = datetime.combine(date.date(), work_start)
+    end_time_dt = datetime.combine(date.date(), work_end)
     
     slots = []
-    while current_time + slot_duration <= end_time:
+    while current_time + slot_duration <= end_time_dt:
         # Check if slot conflicts with existing appointments
         slot_end = current_time + slot_duration
         conflict = False
         
         for appt in appointments:
-            appt_start = parser.parse(appt[5])  # appointment_date field
+            appt_date_str = appt[5]  # appointment_date field
+            try:
+                appt_start = parser.parse(appt_date_str)
+            except:
+                continue
             appt_end = appt_start + timedelta(minutes=appt[6])  # duration_minutes field
             
             if (current_time < appt_end and slot_end > appt_start):
@@ -1214,8 +1345,10 @@ def update_calendar_settings(user_id, **kwargs):
     params = []
     
     for field, value in kwargs.items():
-        updates.append(f"{field} = ?")
-        params.append(value)
+        if field in ['default_view', 'first_day_of_week', 'slot_duration', 'show_weekends',
+                    'send_email_notifications', 'send_telegram_notifications', 'email_template']:
+            updates.append(f"{field} = ?")
+            params.append(value)
     
     if updates:
         params.append(user_id)
@@ -1259,6 +1392,7 @@ def mark_reminder_sent(reminder_id):
     ''', (reminder_id,))
     conn.commit()
     conn.close()
+    return True
 
 # EMAIL TEMPLATE FUNCTIONS
 def get_email_templates(user_id):
@@ -1316,11 +1450,17 @@ def add_unavailable_date(user_id, date, reason="", all_day=True, start_time=None
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     
+    # Convert date to string if it's a datetime object
+    if isinstance(date, datetime):
+        date_str = date.strftime('%Y-%m-%d')
+    else:
+        date_str = str(date)
+    
     cursor.execute('''
         INSERT OR REPLACE INTO unavailable_dates 
         (user_id, date, reason, all_day, start_time, end_time)
         VALUES (?, ?, ?, ?, ?, ?)
-    ''', (user_id, date, reason, all_day, start_time, end_time))
+    ''', (user_id, date_str, reason, all_day, start_time, end_time))
     
     conn.commit()
     conn.close()
@@ -1335,10 +1475,16 @@ def get_unavailable_dates(user_id, start_date=None, end_date=None):
     params = [user_id]
     
     if start_date:
+        # Convert to string if datetime
+        if isinstance(start_date, datetime):
+            start_date = start_date.strftime('%Y-%m-%d')
         query += ' AND date >= ?'
         params.append(start_date)
     
     if end_date:
+        # Convert to string if datetime
+        if isinstance(end_date, datetime):
+            end_date = end_date.strftime('%Y-%m-%d')
         query += ' AND date <= ?'
         params.append(end_date)
     
@@ -1349,6 +1495,13 @@ def get_unavailable_dates(user_id, start_date=None, end_date=None):
 
 def is_date_available(user_id, date):
     """Check if a date is available for appointments"""
+    # Convert to datetime if string
+    if isinstance(date, str):
+        try:
+            date = parser.parse(date).date()
+        except:
+            return False
+    
     # Check if it's a working day
     if not is_working_day(user_id, date):
         return False
@@ -1379,10 +1532,16 @@ def get_appointment_stats(user_id, start_date=None, end_date=None):
     params = [user_id]
     
     if start_date:
+        # Convert to string if datetime
+        if isinstance(start_date, datetime):
+            start_date = start_date.strftime('%Y-%m-%d %H:%M:%S')
         query += ' AND appointment_date >= ?'
         params.append(start_date)
     
     if end_date:
+        # Convert to string if datetime
+        if isinstance(end_date, datetime):
+            end_date = end_date.strftime('%Y-%m-%d %H:%M:%S')
         query += ' AND appointment_date <= ?'
         params.append(end_date)
     
@@ -1421,8 +1580,9 @@ def save_appointment(user_id, client_id, title, description, appointment_date,
         reminder_minutes_before=reminder_minutes_before
     )
 
-def get_appointment(appointment_id):
-    """Get appointment by ID with client details"""
+# NOTE: get_appointment is already defined in Part 3, so I'm renaming this one
+def get_appointment_with_details(appointment_id):
+    """Get appointment by ID with client details - renamed to avoid conflict"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     
@@ -1439,9 +1599,10 @@ def get_appointment(appointment_id):
     conn.close()
     return appointment
 
-def get_user_appointments(user_id, start_date=None, end_date=None, status=None, 
+# NOTE: get_user_appointments is already defined in Part 3, so I'm renaming this one
+def get_user_appointments_filtered(user_id, start_date=None, end_date=None, status=None, 
                          appointment_type=None, client_id=None):
-    """Get user's appointments with filtering options"""
+    """Get user's appointments with filtering options - renamed to avoid conflict"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     
@@ -1454,10 +1615,16 @@ def get_user_appointments(user_id, start_date=None, end_date=None, status=None,
     params = [user_id]
     
     if start_date:
+        # Convert to string if datetime
+        if isinstance(start_date, datetime):
+            start_date = start_date.strftime('%Y-%m-%d %H:%M:%S')
         query += ' AND a.appointment_date >= ?'
         params.append(start_date)
     
     if end_date:
+        # Convert to string if datetime
+        if isinstance(end_date, datetime):
+            end_date = end_date.strftime('%Y-%m-%d %H:%M:%S')
         query += ' AND a.appointment_date <= ?'
         params.append(end_date)
     
@@ -1488,8 +1655,12 @@ def get_week_appointments(user_id, week_start_date):
     # Group by day
     daily_appointments = {}
     for appt in appointments:
-        appt_date = parser.parse(appt[5])  # appointment_date field
-        day_key = appt_date.strftime('%Y-%m-%d')
+        appt_date_str = appt[5]  # appointment_date field
+        try:
+            appt_date = parser.parse(appt_date_str)
+            day_key = appt_date.strftime('%Y-%m-%d')
+        except:
+            day_key = "Unknown"
         
         if day_key not in daily_appointments:
             daily_appointments[day_key] = []
@@ -1498,15 +1669,19 @@ def get_week_appointments(user_id, week_start_date):
     
     return daily_appointments
 
-def get_today_appointments(user_id):
-    """Get today's appointments with time sorting"""
+# NOTE: get_today_appointments is already defined in Part 3, so I'm renaming this one
+def get_today_appointments_with_sorting(user_id):
+    """Get today's appointments with time sorting - renamed to avoid conflict"""
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     today_end = today_start + timedelta(days=1)
     
     appointments = get_user_appointments(user_id, today_start, today_end, 'scheduled')
     
     # Sort by time
-    return sorted(appointments, key=lambda x: parser.parse(x[5]))
+    try:
+        return sorted(appointments, key=lambda x: parser.parse(x[5]) if x[5] else datetime.max)
+    except:
+        return appointments
 
 def update_appointment_status(appointment_id, status, cancellation_reason=None):
     """Update appointment status with optional cancellation reason"""
@@ -1517,16 +1692,23 @@ def update_appointment_status(appointment_id, status, cancellation_reason=None):
     
     return update_appointment(appointment_id, **updates)
 
-def reschedule_appointment(appointment_id, new_date, new_duration=None, new_time=None):
-    """Reschedule an appointment with enhanced options"""
+# NOTE: reschedule_appointment is already defined in Part 3, so I'm renaming this one
+def reschedule_appointment_enhanced(appointment_id, new_date, new_duration=None, new_time=None):
+    """Reschedule an appointment with enhanced options - renamed to avoid conflict"""
     appointment = get_appointment(appointment_id)
     if not appointment:
         return False
     
-    # If new_time is provided, combine with new_date
+    # If new_time is provided as string
     if new_time and isinstance(new_time, str):
-        time_obj = datetime.strptime(new_time, '%H:%M').time()
-        new_date = new_date.replace(hour=time_obj.hour, minute=time_obj.minute)
+        try:
+            time_obj = datetime.strptime(new_time, '%H:%M').time()
+            new_date = datetime.combine(new_date.date() if isinstance(new_date, datetime) else new_date, time_obj)
+        except ValueError:
+            pass
+    # If new_time is provided as datetime.time object
+    elif new_time and hasattr(new_time, 'hour'):
+        new_date = datetime.combine(new_date.date() if isinstance(new_date, datetime) else new_date, new_time)
     
     updates = {
         'appointment_date': new_date,
@@ -1538,15 +1720,25 @@ def reschedule_appointment(appointment_id, new_date, new_duration=None, new_time
     
     return update_appointment(appointment_id, **updates)
 
-def delete_appointment(appointment_id):
-    """Delete an appointment (permanent removal)"""
-    return cancel_appointment(appointment_id, "Deleted by user")
+def delete_appointment_permanently(appointment_id):
+    """Delete an appointment (permanent removal) - renamed for clarity"""
+    # First mark as cancelled
+    cancel_appointment(appointment_id, "Deleted by user")
+    
+    # Then optionally remove from database (commented out for safety)
+    # conn = sqlite3.connect('invoices.db')
+    # cursor = conn.cursor()
+    # cursor.execute('DELETE FROM appointments WHERE appointment_id = ?', (appointment_id,))
+    # conn.commit()
+    # conn.close()
+    
+    return True
 
-def get_user_appointment_types(user_id):
+def get_user_appointment_types_with_details(user_id):
     """Get user's custom appointment types with all details"""
     return get_appointment_types(user_id)
 
-def get_default_appointment_types():
+def get_default_appointment_types_list():
     """Get default appointment types"""
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
@@ -1573,6 +1765,7 @@ def set_appointment_reminder_sent(appointment_id):
     cursor.execute('UPDATE appointments SET reminder_sent = 1 WHERE appointment_id = ?', (appointment_id,))
     conn.commit()
     conn.close()
+    return True
 
 def get_appointments_needing_reminder(hours_before=24):
     """Get appointments needing reminder with enhanced filtering"""
@@ -1581,6 +1774,10 @@ def get_appointments_needing_reminder(hours_before=24):
     
     reminder_window_start = datetime.now() + timedelta(hours=hours_before - 1)
     reminder_window_end = datetime.now() + timedelta(hours=hours_before + 1)
+    
+    # Convert to strings for SQL
+    reminder_window_start_str = reminder_window_start.strftime('%Y-%m-%d %H:%M:%S')
+    reminder_window_end_str = reminder_window_end.strftime('%Y-%m-%d %H:%M:%S')
     
     cursor.execute('''
         SELECT a.*, u.username, u.company_name, u.email as business_email,
@@ -1594,7 +1791,7 @@ def get_appointments_needing_reminder(hours_before=24):
         AND (a.reminder_minutes_before IS NULL OR 
              a.reminder_minutes_before = ? OR
              a.reminder_minutes_before = 0)
-    ''', (reminder_window_start, reminder_window_end, hours_before * 60))
+    ''', (reminder_window_start_str, reminder_window_end_str, hours_before * 60))
     
     appointments = cursor.fetchall()
     conn.close()
@@ -1607,7 +1804,7 @@ def get_upcoming_appointments_count(user_id, days=7):
     appointments = get_user_appointments(user_id, start_date, end_date, 'scheduled')
     return len(appointments)
 
-def get_appointment_statistics(user_id, start_date=None, end_date=None):
+def get_appointment_statistics_enhanced(user_id, start_date=None, end_date=None):
     """Get appointment statistics for dashboard with enhanced metrics"""
     stats = get_appointment_stats(user_id, start_date, end_date)
     
@@ -1615,27 +1812,50 @@ def get_appointment_statistics(user_id, start_date=None, end_date=None):
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
     
+    # Convert dates to strings for SQL
+    start_date_str = start_date.strftime('%Y-%m-%d %H:%M:%S') if start_date else None
+    end_date_str = end_date.strftime('%Y-%m-%d %H:%M:%S') if end_date else None
+    
     # Get most common appointment types
-    cursor.execute('''
+    type_query = '''
         SELECT appointment_type, COUNT(*) as count
         FROM appointments
-        WHERE user_id = ? AND appointment_date >= ? AND appointment_date <= ?
-        GROUP BY appointment_type
-        ORDER BY count DESC
-        LIMIT 5
-    ''', (user_id, start_date or datetime.now().replace(day=1), end_date or datetime.now()))
+        WHERE user_id = ?
+    '''
+    type_params = [user_id]
     
+    if start_date_str:
+        type_query += ' AND appointment_date >= ?'
+        type_params.append(start_date_str)
+    
+    if end_date_str:
+        type_query += ' AND appointment_date <= ?'
+        type_params.append(end_date_str)
+    
+    type_query += ' GROUP BY appointment_type ORDER BY count DESC LIMIT 5'
+    
+    cursor.execute(type_query, type_params)
     top_types = cursor.fetchall()
     
     # Get busiest days
-    cursor.execute('''
+    day_query = '''
         SELECT strftime('%w', appointment_date) as weekday, COUNT(*) as count
         FROM appointments
-        WHERE user_id = ? AND appointment_date >= ? AND appointment_date <= ?
-        GROUP BY weekday
-        ORDER BY count DESC
-    ''', (user_id, start_date or datetime.now().replace(day=1), end_date or datetime.now()))
+        WHERE user_id = ?
+    '''
+    day_params = [user_id]
     
+    if start_date_str:
+        day_query += ' AND appointment_date >= ?'
+        day_params.append(start_date_str)
+    
+    if end_date_str:
+        day_query += ' AND appointment_date <= ?'
+        day_params.append(end_date_str)
+    
+    day_query += ' GROUP BY weekday ORDER BY count DESC'
+    
+    cursor.execute(day_query, day_params)
     busy_days = cursor.fetchall()
     
     conn.close()
@@ -1643,7 +1863,7 @@ def get_appointment_statistics(user_id, start_date=None, end_date=None):
     # Enhance stats dictionary
     stats['top_types'] = top_types
     stats['busy_days'] = busy_days
-    stats['utilization_rate'] = (stats['scheduled'] / max(stats['total'], 1)) * 100
+    stats['utilization_rate'] = (stats.get('scheduled', 0) / max(stats.get('total', 1), 1)) * 100
     
     return stats
 
@@ -1653,6 +1873,10 @@ def get_appointment_conflicts(user_id, start_datetime, duration_minutes, exclude
     
     conn = sqlite3.connect('invoices.db')
     cursor = conn.cursor()
+    
+    # Convert to strings for SQL
+    start_str = start_datetime.strftime('%Y-%m-%d %H:%M:%S')
+    end_str = end_datetime.strftime('%Y-%m-%d %H:%M:%S')
     
     query = '''
         SELECT a.*, c.client_name
@@ -1666,7 +1890,7 @@ def get_appointment_conflicts(user_id, start_datetime, duration_minutes, exclude
         )
     '''
     
-    params = [user_id, end_datetime, start_datetime, start_datetime, end_datetime]
+    params = [user_id, end_str, start_str, start_str, end_str]
     
     if exclude_appointment_id:
         query += ' AND a.appointment_id != ?'
@@ -1684,15 +1908,25 @@ def generate_appointment_summary(appointment_id):
     if not appointment:
         return None
     
-    appt_date = parser.parse(appointment[5])  # appointment_date field
+    appt_date_str = appointment[5]  # appointment_date field
+    try:
+        appt_date = parser.parse(appt_date_str)
+    except:
+        appt_date = datetime.now()
+    
     duration = appointment[6]  # duration_minutes field
     end_time = appt_date + timedelta(minutes=duration)
+    
+    # Get client name - check different positions
+    client_name = "Unknown"
+    if len(appointment) > 12 and appointment[12]:  # from joined query
+        client_name = appointment[12]
     
     summary = f"""
 📅 **Appointment Summary**
 ━━━━━━━━━━━━━━━━━━━━━━
 • **Title:** {appointment[3] or 'No title'}
-• **Client:** {appointment[12] or 'Unknown'}  # client_name
+• **Client:** {client_name}
 • **Date:** {appt_date.strftime('%A, %B %d, %Y')}
 • **Time:** {appt_date.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}
 • **Duration:** {duration} minutes
@@ -1701,7 +1935,7 @@ def generate_appointment_summary(appointment_id):
 • **Description:** {appointment[4] or 'No description provided'}
 """
     
-    if appointment[8] == 'cancelled' and appointment[18]:  # status and cancellation_reason
+    if appointment[8] == 'cancelled' and len(appointment) > 18 and appointment[18]:  # status and cancellation_reason
         summary += f"• **Cancellation Reason:** {appointment[18]}\n"
     
     return summary.strip()
@@ -1716,28 +1950,48 @@ def check_date_availability(user_id, date):
 
 def send_appointment_confirmation(appointment_id):
     """Send appointment confirmation to client"""
-    appointment = get_appointment(appointment_id)
+    appointment = get_appointment_with_details(appointment_id)
     if not appointment:
         return False
     
-    client_email = appointment[13]  # email from client join
+    # Get client email - check different positions
+    client_email = None
+    if len(appointment) > 13 and appointment[13]:  # email from client join
+        client_email = appointment[13]
+    
     if not client_email:
         return False
     
     # Get email template
     template = get_default_email_template(appointment[1])  # user_id
     
+    # Get client name
+    client_name = "Valued Client"
+    if len(appointment) > 12 and appointment[12]:
+        client_name = appointment[12]
+    
+    # Get company name
+    company_name = "Our Team"
+    if len(appointment) > 15 and appointment[15]:
+        company_name = appointment[15]
+    
+    appt_date_str = appointment[5]
+    try:
+        appt_date = parser.parse(appt_date_str)
+    except:
+        appt_date = datetime.now()
+    
     if not template:
         # Use default template
         subject = f"Appointment Confirmation: {appointment[3]}"
         body = f"""
-Dear {appointment[12]},
+Dear {client_name},
 
 Your appointment has been confirmed.
 
 **Details:**
-- Date: {parser.parse(appointment[5]).strftime('%B %d, %Y')}
-- Time: {parser.parse(appointment[5]).strftime('%I:%M %p')}
+- Date: {appt_date.strftime('%B %d, %Y')}
+- Time: {appt_date.strftime('%I:%M %p')}
 - Duration: {appointment[6]} minutes
 - Type: {appointment[7]}
 - Description: {appointment[4] or 'None'}
@@ -1745,29 +1999,32 @@ Your appointment has been confirmed.
 Thank you for your booking.
 
 Best regards,
-{appointment[15] or 'Our Team'}  # company_name
+{company_name}
 """
     else:
         # Use custom template
         subject = template[3].format(  # subject field
             title=appointment[3],
-            date=parser.parse(appointment[5]).strftime('%B %d, %Y'),
-            time=parser.parse(appointment[5]).strftime('%I:%M %p'),
-            client_name=appointment[12]
+            date=appt_date.strftime('%B %d, %Y'),
+            time=appt_date.strftime('%I:%M %p'),
+            client_name=client_name
         )
         
         body = template[4].format(  # body field
-            client_name=appointment[12],
-            date=parser.parse(appointment[5]).strftime('%B %d, %Y'),
-            time=parser.parse(appointment[5]).strftime('%I:%M %p'),
+            client_name=client_name,
+            date=appt_date.strftime('%B %d, %Y'),
+            time=appt_date.strftime('%I:%M %p'),
             duration=appointment[6],
             type=appointment[7],
             description=appointment[4] or '',
-            company_name=appointment[15] or 'Our Team'
+            company_name=company_name
         )
     
     # Send email (implementation depends on your email setup)
     # send_email(client_email, subject, body)
+    
+    # For now, just log it
+    logger.info(f"Would send confirmation email to {client_email}: {subject}")
     
     return True
 
@@ -1819,10 +2076,16 @@ def create_recurring_appointments(user_id, client_id, title, description,
         if recurrence_pattern == 'monthly':
             # Add one month
             try:
-                current_date = current_date.replace(month=current_date.month + 1)
+                if current_date.month == 12:
+                    current_date = current_date.replace(year=current_date.year + 1, month=1)
+                else:
+                    current_date = current_date.replace(month=current_date.month + 1)
             except ValueError:
-                # If month exceeds 12, go to next year
-                current_date = current_date.replace(year=current_date.year + 1, month=1)
+                # Handle invalid date (e.g., Jan 31 -> Feb 28/29)
+                try:
+                    current_date = current_date.replace(month=current_date.month + 1, day=28)
+                except:
+                    break
         else:
             current_date += interval
     
@@ -1833,7 +2096,7 @@ def export_appointments_to_csv(user_id, start_date=None, end_date=None):
     import csv
     from io import StringIO
     
-    appointments = get_user_appointments(user_id, start_date, end_date)
+    appointments = get_user_appointments_filtered(user_id, start_date, end_date)
     
     output = StringIO()
     writer = csv.writer(output)
@@ -1846,14 +2109,22 @@ def export_appointments_to_csv(user_id, start_date=None, end_date=None):
     
     # Write data
     for appt in appointments:
-        appt_date = parser.parse(appt[5])
+        appt_date_str = appt[5]
+        try:
+            appt_date = parser.parse(appt_date_str)
+            date_str = appt_date.strftime('%Y-%m-%d')
+            time_str = appt_date.strftime('%H:%M')
+        except:
+            date_str = appt_date_str
+            time_str = ''
+        
         writer.writerow([
             appt[0],  # appointment_id
             appt[12] if len(appt) > 12 else '',  # client_name
             appt[3],  # title
             appt[4],  # description
-            appt_date.strftime('%Y-%m-%d'),
-            appt_date.strftime('%H:%M'),
+            date_str,
+            time_str,
             appt[6],  # duration_minutes
             appt[7],  # appointment_type
             appt[8],  # status
@@ -1864,12 +2135,14 @@ def export_appointments_to_csv(user_id, start_date=None, end_date=None):
     return output.getvalue()
 
 print("✅ Appointment helper functions enhanced with comprehensive scheduling features!")
+    
 # ==================================================
-# PART 3: INVOICE GENERATION AND PDF CREATION (Updated with Appointment Features)
+# PART 4: INVOICE GENERATION AND PDF CREATION (Updated with Appointment Features)
 # ==================================================
 
 # Invoice generation
 def generate_invoice_number(user_id):
+    """Generate unique invoice number"""
     counter = get_invoice_counter(user_id)
     now = datetime.now()
     invoice_number = f"INV-{now.year}-{now.month:02d}-{counter:04d}"
@@ -1909,6 +2182,7 @@ def create_appointment_confirmation_pdf(appointment_data, user_info, client_info
         story = []
         styles = getSampleStyleSheet()
         
+        # Create custom styles
         title_style = styles["Heading1"]
         title_style.alignment = TA_CENTER
         title_style.textColor = colors.HexColor('#4a6ee0')
@@ -1928,39 +2202,52 @@ def create_appointment_confirmation_pdf(appointment_data, user_info, client_info
         small_style.textColor = colors.gray
         
         # Header section
-        has_logo = user_info.get('logo_path') and os.path.exists(user_info['logo_path'])
-        company_name = user_info.get('company_name', '')
+        company_name = ""
+        if user_info and len(user_info) > 8:
+            company_name = user_info[8] if user_info[8] else ''
         
-        if has_logo:
-            try:
-                logo = Image(user_info['logo_path'], width=2*inch, height=1*inch)
-                story.append(logo)
-                story.append(Spacer(1, 0.2*inch))
-            except Exception as e:
-                logger.warning(f"Could not load logo: {e}")
-                has_logo = False
+        has_logo = False
+        if user_info and len(user_info) > 7 and user_info[7]:  # logo_path
+            logo_path = user_info[7]
+            if os.path.exists(logo_path):
+                try:
+                    logo = Image(logo_path, width=2*inch, height=1*inch)
+                    story.append(logo)
+                    story.append(Spacer(1, 0.2*inch))
+                    has_logo = True
+                except Exception as e:
+                    logger.warning(f"Could not load logo: {e}")
+                    has_logo = False
         
         # Appointment title
-        title_text = f"<b>APPOINTMENT CONFIRMATION</b>"
+        title_text = "<b>APPOINTMENT CONFIRMATION</b>"
         story.append(Paragraph(title_text, title_style))
         
         # Appointment reference
         ref_style = styles["Normal"]
         ref_style.alignment = TA_CENTER
         ref_style.textColor = colors.HexColor('#666666')
-        story.append(Paragraph(f"Reference: {appointment_data['appointment_number']}", ref_style))
+        appointment_number = appointment_data.get('appointment_number', 'N/A')
+        story.append(Paragraph(f"Reference: {appointment_number}", ref_style))
         
         story.append(Spacer(1, 0.3*inch))
         
-        # Appointment details in a table
-        appt_date = parser.parse(appointment_data['appointment_date'])
-        end_time = appt_date + timedelta(minutes=appointment_data['duration_minutes'])
+        # Parse appointment date
+        appt_date_str = appointment_data.get('appointment_date', '')
+        try:
+            appt_date = parser.parse(appt_date_str)
+        except:
+            appt_date = datetime.now()
         
+        duration = appointment_data.get('duration_minutes', 60)
+        end_time = appt_date + timedelta(minutes=duration)
+        
+        # Appointment details in a table
         details_data = [
             [Paragraph("<b>Appointment Details</b>", heading_style), ""],
             ["", ""],
             [Paragraph("<b>Title:</b>", bold_style), 
-             Paragraph(appointment_data['title'], normal_style)],
+             Paragraph(appointment_data.get('title', 'N/A'), normal_style)],
             
             [Paragraph("<b>Date:</b>", bold_style), 
              Paragraph(appt_date.strftime('%A, %B %d, %Y'), normal_style)],
@@ -1969,13 +2256,13 @@ def create_appointment_confirmation_pdf(appointment_data, user_info, client_info
              Paragraph(f"{appt_date.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}", normal_style)],
             
             [Paragraph("<b>Duration:</b>", bold_style), 
-             Paragraph(f"{appointment_data['duration_minutes']} minutes", normal_style)],
+             Paragraph(f"{duration} minutes", normal_style)],
             
             [Paragraph("<b>Type:</b>", bold_style), 
-             Paragraph(appointment_data['appointment_type'].title(), normal_style)],
+             Paragraph(appointment_data.get('appointment_type', 'Meeting').title(), normal_style)],
             
             [Paragraph("<b>Status:</b>", bold_style), 
-             Paragraph(appointment_data['status'].title(), normal_style)],
+             Paragraph(appointment_data.get('status', 'Scheduled').title(), normal_style)],
         ]
         
         if appointment_data.get('description'):
@@ -2011,17 +2298,20 @@ def create_appointment_confirmation_pdf(appointment_data, user_info, client_info
         story.append(Paragraph("<b>Client Information</b>", heading_style))
         
         client_details = []
-        if client_info.get('client_name'):
+        if client_info and client_info.get('client_name'):
             client_details.append(f"<b>Name:</b> {client_info['client_name']}")
-        if client_info.get('email'):
+        if client_info and client_info.get('email'):
             client_details.append(f"<b>Email:</b> {client_info['email']}")
-        if client_info.get('phone'):
+        if client_info and client_info.get('phone'):
             client_details.append(f"<b>Phone:</b> {client_info['phone']}")
-        if client_info.get('address'):
+        if client_info and client_info.get('address'):
             client_details.append(f"<b>Address:</b> {client_info['address']}")
         
-        for detail in client_details:
-            story.append(Paragraph(detail, normal_style))
+        if client_details:
+            for detail in client_details:
+                story.append(Paragraph(detail, normal_style))
+        else:
+            story.append(Paragraph("No client information available", normal_style))
         
         story.append(Spacer(1, 0.4*inch))
         
@@ -2031,10 +2321,13 @@ def create_appointment_confirmation_pdf(appointment_data, user_info, client_info
         business_details = []
         if company_name:
             business_details.append(f"<b>Company:</b> {company_name}")
-        if user_info.get('email'):
-            business_details.append(f"<b>Contact Email:</b> {user_info['email']}")
-        if user_info.get('phone'):
-            business_details.append(f"<b>Contact Phone:</b> {user_info['phone']}")
+        
+        # Get user email and phone from user_info tuple
+        if user_info:
+            if len(user_info) > 13 and user_info[13]:  # email field
+                business_details.append(f"<b>Contact Email:</b> {user_info[13]}")
+            if len(user_info) > 14 and user_info[14]:  # phone field
+                business_details.append(f"<b>Contact Phone:</b> {user_info[14]}")
         
         for detail in business_details:
             story.append(Paragraph(detail, normal_style))
@@ -2059,12 +2352,6 @@ def create_appointment_confirmation_pdf(appointment_data, user_info, client_info
         
         story.append(Spacer(1, 0.3*inch))
         
-        # QR Code for appointment (placeholder - would need qrcode library)
-        # Uncomment if you add qrcode library
-        # qr_style = styles["Normal"]
-        # qr_style.alignment = TA_CENTER
-        # story.append(Paragraph("<b>Scan to add to calendar</b>", qr_style))
-        
         # Footer
         footer_style = styles["Normal"]
         footer_style.alignment = TA_CENTER
@@ -2088,7 +2375,7 @@ def create_appointment_confirmation_pdf(appointment_data, user_info, client_info
         
         # Save PDF
         os.makedirs('appointments', exist_ok=True)
-        pdf_file = f"appointments/{appointment_data['appointment_number']}.pdf"
+        pdf_file = f"appointments/{appointment_number}.pdf"
         with open(pdf_file, 'wb') as f:
             f.write(pdf_data)
         
@@ -2097,6 +2384,7 @@ def create_appointment_confirmation_pdf(appointment_data, user_info, client_info
         
     except Exception as e:
         logger.error(f"Appointment PDF generation error: {e}")
+        # Return minimal PDF or raise exception
         raise
 
 def create_calendar_export_pdf(user_id, start_date, end_date):
@@ -2137,7 +2425,10 @@ def create_calendar_export_pdf(user_id, start_date, end_date):
         small_style.fontSize = 9
         
         # Header
-        company_name = user_info[8] if len(user_info) > 8 and user_info[8] else "Your Business"
+        company_name = "Your Business"
+        if user_info and len(user_info) > 8 and user_info[8]:
+            company_name = user_info[8]
+            
         story.append(Paragraph(f"<b>{company_name} - Appointment Calendar</b>", title_style))
         
         date_range = f"{start_date.strftime('%B %d, %Y')} to {end_date.strftime('%B %d, %Y')}"
@@ -2148,8 +2439,12 @@ def create_calendar_export_pdf(user_id, start_date, end_date):
         # Group appointments by date
         appointments_by_date = {}
         for appt in appointments:
-            appt_date = parser.parse(appt[5])  # appointment_date field
-            date_key = appt_date.strftime('%Y-%m-%d')
+            appt_date_str = appt[5]  # appointment_date field
+            try:
+                appt_date = parser.parse(appt_date_str)
+                date_key = appt_date.strftime('%Y-%m-%d')
+            except:
+                date_key = "Unknown"
             
             if date_key not in appointments_by_date:
                 appointments_by_date[date_key] = []
@@ -2157,11 +2452,14 @@ def create_calendar_export_pdf(user_id, start_date, end_date):
             appointments_by_date[date_key].append(appt)
         
         # Sort dates
-        sorted_dates = sorted(appointments_by_date.keys())
+        sorted_dates = sorted([d for d in appointments_by_date.keys() if d != "Unknown"])
         
         # Create calendar view
         for date_key in sorted_dates:
-            date_obj = datetime.strptime(date_key, '%Y-%m-%d')
+            try:
+                date_obj = datetime.strptime(date_key, '%Y-%m-%d')
+            except:
+                continue
             
             # Date header
             date_header = date_obj.strftime('%A, %B %d, %Y')
@@ -2185,31 +2483,27 @@ def create_calendar_export_pdf(user_id, start_date, end_date):
             ]
             
             for appt in day_appointments:
-                appt_time = parser.parse(appt[5])
-                duration = appt[6]
-                end_time = appt_time + timedelta(minutes=duration)
+                appt_date_str = appt[5]
+                try:
+                    appt_time = parser.parse(appt_date_str)
+                    duration = appt[6] if len(appt) > 6 else 60
+                    end_time = appt_time + timedelta(minutes=duration)
+                    time_range = f"{appt_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}"
+                except:
+                    time_range = "Time N/A"
+                    duration = 0
                 
                 client_name = "Unknown"
                 if len(appt) > 12 and appt[12]:  # client_name from join
                     client_name = appt[12]
                 
-                time_range = f"{appt_time.strftime('%I:%M %p')} - {end_time.strftime('%I:%M %p')}"
-                
-                # Color code based on status
-                status = appt[8]
-                if status == 'completed':
-                    status_color = colors.green
-                elif status == 'cancelled':
-                    status_color = colors.red
-                elif status == 'rescheduled':
-                    status_color = colors.orange
-                else:
-                    status_color = colors.blue
+                appointment_type = appt[7] if len(appt) > 7 else "Meeting"
+                status = appt[8] if len(appt) > 8 else "Scheduled"
                 
                 table_data.append([
                     Paragraph(time_range, small_style),
                     Paragraph(client_name[:20] + ("..." if len(client_name) > 20 else ""), small_style),
-                    Paragraph(appt[7], small_style),  # appointment_type
+                    Paragraph(appointment_type, small_style),
                     Paragraph(f"{duration} min", small_style),
                     Paragraph(status.title(), small_style)
                 ])
@@ -2233,17 +2527,20 @@ def create_calendar_export_pdf(user_id, start_date, end_date):
         story.append(Paragraph("<b>Summary</b>", heading_style))
         
         total_appointments = len(appointments)
-        scheduled = sum(1 for a in appointments if a[8] == 'scheduled')
-        completed = sum(1 for a in appointments if a[8] == 'completed')
-        cancelled = sum(1 for a in appointments if a[8] == 'cancelled')
+        scheduled = sum(1 for a in appointments if len(a) > 8 and a[8] == 'scheduled')
+        completed = sum(1 for a in appointments if len(a) > 8 and a[8] == 'completed')
+        cancelled = sum(1 for a in appointments if len(a) > 8 and a[8] == 'cancelled')
         
         summary_data = [
             ["Total Appointments:", str(total_appointments)],
             ["Scheduled:", str(scheduled)],
             ["Completed:", str(completed)],
             ["Cancelled:", str(cancelled)],
-            ["Completion Rate:", f"{(completed/max(total_appointments, 1))*100:.1f}%"]
         ]
+        
+        if total_appointments > 0:
+            completion_rate = (completed / total_appointments) * 100
+            summary_data.append(["Completion Rate:", f"{completion_rate:.1f}%"])
         
         summary_table = Table(summary_data, colWidths=[2*inch, 1*inch])
         summary_table.setStyle(TableStyle([
@@ -2318,16 +2615,22 @@ def create_appointment_reminder_pdf(appointment_data):
         story.append(Paragraph("<b>APPOINTMENT REMINDER</b>", title_style))
         story.append(Spacer(1, 0.2*inch))
         
-        # Appointment details
-        appt_date = parser.parse(appointment_data['appointment_date'])
-        time_str = appt_date.strftime('%I:%M %p')
-        date_str = appt_date.strftime('%A, %b %d')
+        # Parse appointment date
+        appt_date_str = appointment_data.get('appointment_date', '')
+        try:
+            appt_date = parser.parse(appt_date_str)
+            time_str = appt_date.strftime('%I:%M %p')
+            date_str = appt_date.strftime('%A, %b %d')
+        except:
+            time_str = "Time N/A"
+            date_str = "Date N/A"
         
+        # Appointment details
         details = [
             f"<b>When:</b> {date_str} at {time_str}",
-            f"<b>What:</b> {appointment_data['title']}",
-            f"<b>Duration:</b> {appointment_data['duration_minutes']} minutes",
-            f"<b>Type:</b> {appointment_data['appointment_type'].title()}"
+            f"<b>What:</b> {appointment_data.get('title', 'Appointment')}",
+            f"<b>Duration:</b> {appointment_data.get('duration_minutes', 60)} minutes",
+            f"<b>Type:</b> {appointment_data.get('appointment_type', 'Meeting').title()}"
         ]
         
         for detail in details:
@@ -2365,7 +2668,7 @@ def create_appointment_reminder_pdf(appointment_data):
         return None
 
 # ==================================================
-# EMAIL FUNCTIONS FOR APPOINTMENTS
+# PART 5: EMAIL FUNCTIONS FOR APPOINTMENTS
 # ==================================================
 
 def send_appointment_email(appointment_id, email_type="confirmation"):
@@ -2417,8 +2720,17 @@ def send_appointment_email(appointment_id, email_type="confirmation"):
             subject = f"Appointment Update: {appt_data['title']}"
         
         # Prepare email content
-        company_name = user_info[8] if len(user_info) > 8 and user_info[8] else "Your Business"
-        appt_date = parser.parse(appt_data['appointment_date'])
+        company_name = "Your Business"
+        if user_info and len(user_info) > 8 and user_info[8]:
+            company_name = user_info[8]
+            
+        try:
+            appt_date = parser.parse(appt_data['appointment_date'])
+            date_str = appt_date.strftime('%A, %B %d, %Y')
+            time_str = appt_date.strftime('%I:%M %p')
+        except:
+            date_str = "Date not specified"
+            time_str = "Time not specified"
         
         # HTML email body
         html_body = f"""
@@ -2434,8 +2746,8 @@ def send_appointment_email(appointment_id, email_type="confirmation"):
                     
                     <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
                         <h3 style="margin-top: 0;">{appt_data['title']}</h3>
-                        <p><strong>Date:</strong> {appt_date.strftime('%A, %B %d, %Y')}</p>
-                        <p><strong>Time:</strong> {appt_date.strftime('%I:%M %p')}</p>
+                        <p><strong>Date:</strong> {date_str}</p>
+                        <p><strong>Time:</strong> {time_str}</p>
                         <p><strong>Duration:</strong> {appt_data['duration_minutes']} minutes</p>
                         <p><strong>Type:</strong> {appt_data['appointment_type'].title()}</p>
                     </div>
@@ -2470,8 +2782,8 @@ def send_appointment_email(appointment_id, email_type="confirmation"):
         
         Company: {company_name}
         Appointment: {appt_data['title']}
-        Date: {appt_date.strftime('%A, %B %d, %Y')}
-        Time: {appt_date.strftime('%I:%M %p')}
+        Date: {date_str}
+        Time: {time_str}
         Duration: {appt_data['duration_minutes']} minutes
         Type: {appt_data['appointment_type'].title()}
         
@@ -2577,25 +2889,29 @@ def create_invoice_pdf(invoice_data, user_info):
         }
         
         # Get currency symbol or use code as fallback
-        currency_code = invoice_data['currency']
+        currency_code = invoice_data.get('currency', 'USD')
         currency_symbol = currency_symbols.get(currency_code, currency_code)
         
         # Header section
-        has_logo = user_info.get('logo_path') and os.path.exists(user_info['logo_path'])
-        company_name = user_info.get('company_name', '')
+        company_name = ""
+        has_logo = False
+        if user_info and len(user_info) > 8:
+            company_name = user_info[8] if user_info[8] else ''
+        
+        if user_info and len(user_info) > 7 and user_info[7]:  # logo_path
+            logo_path = user_info[7]
+            if os.path.exists(logo_path):
+                try:
+                    logo = Image(logo_path, width=2.5*inch, height=1.25*inch)
+                    has_logo = True
+                except Exception as e:
+                    logger.warning(f"Could not load logo: {e}")
+                    has_logo = False
         
         header_data = []
         
         if has_logo:
-            try:
-                logo = Image(user_info['logo_path'], width=2.5*inch, height=1.25*inch)
-                header_data.append(logo)
-            except Exception as e:
-                logger.warning(f"Could not load logo: {e}")
-                has_logo = False
-                if company_name:
-                    company_text = Paragraph(f"<b>{company_name}</b>", bold_style)
-                    header_data.append(company_text)
+            header_data.append(logo)
         elif company_name:
             company_text = Paragraph(f"<b>{company_name}</b>", bold_style)
             header_data.append(company_text)
@@ -2617,16 +2933,15 @@ def create_invoice_pdf(invoice_data, user_info):
         story.append(Spacer(1, 0.4*inch))
         
         # Company registration and VAT numbers if available
-        # FIXED: Only show VAT registration number if VAT is enabled on this invoice
         reg_data = []
         
         # Always show company registration number if available
-        if user_info.get('company_reg_number'):
-            reg_data.append(Paragraph(f"<b>Company Reg:</b> {user_info['company_reg_number']}", normal_style))
+        if user_info and len(user_info) > 9 and user_info[9]:  # company_reg_number
+            reg_data.append(Paragraph(f"<b>Company Reg:</b> {user_info[9]}", normal_style))
         
         # Only show VAT registration number if VAT is enabled for this invoice
-        if invoice_data.get('vat_enabled') and user_info.get('vat_reg_number'):
-            reg_data.append(Paragraph(f"<b>VAT Reg:</b> {user_info['vat_reg_number']}", normal_style))
+        if invoice_data.get('vat_enabled') and user_info and len(user_info) > 10 and user_info[10]:  # vat_reg_number
+            reg_data.append(Paragraph(f"<b>VAT Reg:</b> {user_info[10]}", normal_style))
         
         if reg_data:
             for reg in reg_data:
@@ -2636,12 +2951,12 @@ def create_invoice_pdf(invoice_data, user_info):
         # Invoice details
         details_data = [
             [Paragraph("<b>Invoice Number:</b>", bold_style), 
-             Paragraph(invoice_data['invoice_number'], normal_style),
+             Paragraph(invoice_data.get('invoice_number', 'N/A'), normal_style),
              Paragraph("<b>Date:</b>", bold_style), 
-             Paragraph(invoice_data['invoice_date'], normal_style)],
+             Paragraph(invoice_data.get('invoice_date', 'N/A'), normal_style)],
             
             [Paragraph("<b>Bill To:</b>", bold_style), 
-             Paragraph(invoice_data['client_name'], normal_style),
+             Paragraph(invoice_data.get('client_name', 'N/A'), normal_style),
              Paragraph("", normal_style), 
              Paragraph("", normal_style)]
         ]
@@ -2666,25 +2981,27 @@ def create_invoice_pdf(invoice_data, user_info):
         ]
         
         subtotal = 0
-        for item in invoice_data['items']:
-            total = item['quantity'] * item['amount']
+        items = invoice_data.get('items', [])
+        for item in items:
+            quantity = item.get('quantity', 0)
+            amount = item.get('amount', 0.0)
+            total = quantity * amount
             subtotal += total
             table_data.append([
-                Paragraph(item['description'], normal_style),
-                Paragraph(str(item['quantity']), normal_style),
-                # FIXED: Use currency symbol instead of code
-                Paragraph(f"{currency_symbol} {item['amount']:.2f}", normal_style),
+                Paragraph(item.get('description', ''), normal_style),
+                Paragraph(str(quantity), normal_style),
+                Paragraph(f"{currency_symbol} {amount:.2f}", normal_style),
                 Paragraph(f"{currency_symbol} {total:.2f}", normal_style)
             ])
         
         # Add VAT row if enabled
-        if invoice_data.get('vat_enabled'):
+        vat_enabled = invoice_data.get('vat_enabled', False)
+        if vat_enabled:
             vat_amount = subtotal * 0.2
             table_data.append([
                 Paragraph("<b>VAT @ 20%</b>", bold_style),
                 Paragraph("", normal_style),
                 Paragraph("", normal_style),
-                # FIXED: Use currency symbol instead of code
                 Paragraph(f"<b>{currency_symbol} {vat_amount:.2f}</b>", bold_style)
             ])
             grand_total = subtotal + vat_amount
@@ -2696,7 +3013,6 @@ def create_invoice_pdf(invoice_data, user_info):
             Paragraph("<b>TOTAL</b>", bold_style),
             Paragraph("", normal_style),
             Paragraph("", normal_style),
-            # FIXED: Use currency symbol instead of code
             Paragraph(f"<b>{currency_symbol} {grand_total:.2f}</b>", bold_style)
         ])
         
@@ -2739,7 +3055,7 @@ def create_invoice_pdf(invoice_data, user_info):
         
         # Footer
         footer_text = "Generated by Minigma Business Suite"
-        if has_logo and company_name:
+        if company_name:
             footer_text = f"{company_name} | {footer_text}"
         
         footer_style = styles["Normal"]
@@ -2758,7 +3074,7 @@ def create_invoice_pdf(invoice_data, user_info):
         buffer.close()
         
         os.makedirs('invoices', exist_ok=True)
-        pdf_file = f"invoices/{invoice_data['invoice_number']}.pdf"
+        pdf_file = f"invoices/{invoice_data.get('invoice_number', 'invoice')}.pdf"
         with open(pdf_file, 'wb') as f:
             f.write(pdf_data)
         
@@ -2769,24 +3085,8 @@ def create_invoice_pdf(invoice_data, user_info):
         logger.error(f"PDF generation error: {e}")
         raise
 
-print("✅ Part 3 updated with comprehensive appointment PDF and email functionality!")
+print("✅ Part 5 updated with comprehensive appointment PDF and email functionality!")
 
-
-
-# ==================================================
-# APPOINTMENT CREATION HANDLERS
-# ==================================================
-
-async def handle_appointment_creation(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle appointment scheduling text input"""
-    user_id = update.effective_user.id
-    text = update.message.text
-    
-    if 'scheduling' not in context.user_data:
-        await update.message.reply_text("Please start with /schedule to begin appointment booking.")
-        return
-    
-    scheduling_data = context.user_data['scheduling']# ==================================================
 # PART 4: COMMAND HANDLERS (Updated with Scheduling)
 # ==================================================
 
@@ -10110,6 +10410,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
