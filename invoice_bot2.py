@@ -3736,7 +3736,69 @@ async def reschedule_command(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Set reminders for appointments"""
-    [your remind_command function code...]
+    user_id = update.effective_user.id
+    
+    # Get upcoming appointments
+    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    next_week = today + timedelta(days=7)
+    appointments = get_user_appointments(user_id, today, next_week, 'scheduled')
+    
+    if not appointments:
+        await update.message.reply_text(
+            "⏰ **Set Reminders**\n\n"
+            "No upcoming appointments found to set reminders for.\n\n"
+            "📅 Use /schedule to book appointments\n"
+            "📋 Use /appointments to view upcoming appointments"
+        )
+        return
+    
+    # Show appointments with reminder status
+    message = "⏰ **Set Appointment Reminders**\n\n"
+    message += "You can set reminders for your upcoming appointments:\n\n"
+    
+    keyboard = []
+    for appt in appointments[:8]:  # Show first 8 appointments
+        appt_id = appt[0]
+        appt_time = parser.parse(appt[5])
+        client_name = appt[12] if len(appt) > 12 else "Unknown"
+        title = appt[3] or "Meeting"
+        
+        # Check if reminder is already set
+        has_reminder = appt[9] if len(appt) > 9 else False
+        
+        reminder_status = "✅ Enabled" if has_reminder else "❌ Disabled"
+        
+        message += (
+            f"📅 **{appt_time.strftime('%a %d %b %H:%M')}** - {title}\n"
+            f"   👤 {client_name}\n"
+            f"   ⏰ Reminder: {reminder_status}\n\n"
+        )
+        
+        # Create toggle button
+        toggle_text = "🔕 Disable" if has_reminder else "🔔 Enable"
+        keyboard.append([
+            InlineKeyboardButton(
+                f"{toggle_text} - {appt_time.strftime('%H:%M')} {title[:10]}", 
+                callback_data=f"toggle_reminder_{appt_id}"
+            )
+        ])
+    
+    # Add global reminder settings button
+    keyboard.append([
+        InlineKeyboardButton("⚙️ Global Reminder Settings", callback_data="reminder_settings"),
+        InlineKeyboardButton("📅 View Calendar", callback_data="reminder_view_calendar")
+    ])
+    
+    keyboard.append([
+        InlineKeyboardButton("✅ Save All Settings", callback_data="reminder_save_all"),
+        InlineKeyboardButton("❌ Cancel", callback_data="reminder_cancel")
+    ])
+    
+    await update.message.reply_text(
+        message,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode='Markdown'
+    )
 
 async def reminder_settings_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [your reminder_settings_command function code...]
@@ -9850,6 +9912,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
