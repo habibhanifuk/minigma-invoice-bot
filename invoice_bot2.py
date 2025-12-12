@@ -3800,8 +3800,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown'
     )
 
-async def handle_reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle reminder-related callback queries"""
+async def handle_reminder_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):    
     query = update.callback_query
     await query.answer()
     
@@ -10121,6 +10120,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
