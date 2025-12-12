@@ -6420,8 +6420,8 @@ application.add_handler(CommandHandler("today", today_command))
 application.add_handler(CommandHandler("week", week_command))
 application.add_handler(CommandHandler("remind", remind_command))
 application.add_handler(CommandHandler("reschedule", reschedule_command))
-# application.add_handler(CommandHandler("cancel", cancel_command))  # TODO: Define cancel_command
-# application.add_handler(CommandHandler("settings", settings_command))  # TODO: Define settings_command
+# application.add_handler(CommandHandler("cancel", cancel_command))
+# application.add_handler(CommandHandler("settings", settings_command))
 
 # ===== ADD SCHEDULING CALLBACK HANDLERS =====
 application.add_handler(CallbackQueryHandler(schedule_client_handler, pattern="^schedule_client_"))
@@ -10120,6 +10120,7 @@ def get_filtered_appointments(user_id: int, filters: Dict) -> List[tuple]:
         query += ' AND c.client_name LIKE ?'
         params.append(f'%{filters["client"]}%')
     
+
 
 
 
