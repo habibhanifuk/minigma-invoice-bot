@@ -10868,7 +10868,162 @@ async def show_day_view(update, user_id: int, target_date: datetime):
 async def show_agenda_view(update, user_id: int, target_date: datetime):
     """Show agenda view - need to implement"""
     await update.message.reply_text("Agenda view not implemented yet.")
+
+# ==================================================
+# BOT EXECUTION & STARTUP CODE
+# ==================================================
+
+def main():
+    """Start the bot"""
+    print("🤖 Starting Minigma Business Suite Bot...")
     
+    # Get bot token from environment variable or hardcode it
+    import os
+    BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
+    
+    if BOT_TOKEN == 'YOUR_BOT_TOKEN_HERE':
+        print("❌ ERROR: Bot token not found!")
+        print("Please do one of the following:")
+        print("1. Replace 'YOUR_BOT_TOKEN_HERE' with your actual bot token")
+        print("2. Set the TELEGRAM_BOT_TOKEN environment variable:")
+        print("   export TELEGRAM_BOT_TOKEN='your_token_here'")
+        return
+    
+    # Create the Application
+    application = Application.builder().token(BOT_TOKEN).build()
+    
+    # ===== REGISTER COMMAND HANDLERS =====
+    
+    # Basic commands
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("help", help_command))
+    
+    # Appointment commands (add these if you have them defined)
+    # application.add_handler(CommandHandler("schedule", schedule_command))
+    # application.add_handler(CommandHandler("calendar", calendar_advanced_command))
+    # application.add_handler(CommandHandler("appointments", appointment_list_command))
+    
+    # Text handler - IMPORTANT for all text inputs
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
+    
+    # Callback query handler for inline buttons
+    application.add_handler(CallbackQueryHandler(handle_button_callback))
+    
+    # ===== SCHEDULED TASKS =====
+    
+    # Schedule regular jobs
+    job_queue = application.job_queue
+    
+    # Check for reminders every 5 minutes
+    job_queue.run_repeating(send_scheduled_reminders, interval=300, first=10)
+    
+    # Check for overdue appointments every hour
+    job_queue.run_repeating(check_overdue_appointments, interval=3600, first=60)
+    
+    # Send daily schedules at 8 AM
+    job_queue.run_daily(send_daily_schedule, time=datetime.time(hour=8, minute=0))
+    
+    # ===== START BOT =====
+    
+    print("✅ Bot initialized successfully!")
+    print("📡 Starting polling...")
+    print("🤖 Bot is now running. Press Ctrl+C to stop.")
+    
+    # Start the bot
+    application.run_polling(drop_pending_updates=True)
+
+# ===== CALLBACK HANDLER (MISSING FUNCTION) =====
+
+async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline keyboard button presses"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    
+    # Handle different callback patterns
+    if data.startswith("book_type_"):
+        appointment_type = data.replace("book_type_", "")
+        await handle_booking_type(query, appointment_type)
+    elif data == "schedule_command":
+        await schedule_command(query, context)
+    elif data == "calendar_advanced":
+        await calendar_advanced_command(query, context)
+    elif data == "appointment_list":
+        await appointment_list_command(query, context)
+    # Add more callback handlers as needed
+    else:
+        await query.edit_message_text(f"Button pressed: {data}")
+
+# ===== MISSING FUNCTIONS YOU NEED TO DEFINE =====
+
+def get_user(user_id: int):
+    """Get user from database - implement this"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT * FROM users WHERE user_id = ?', (user_id,))
+    user = cursor.fetchone()
+    conn.close()
+    return user
+
+def create_user(user_id: int, username: str, first_name: str, last_name: str):
+    """Create user in database - implement this"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT OR IGNORE INTO users (user_id, username, first_name, last_name, created_at)
+        VALUES (?, ?, ?, ?, datetime('now'))
+    ''', (user_id, username, first_name, last_name))
+    conn.commit()
+    conn.close()
+
+def get_pending_reminders():
+    """Get pending reminders - implement this"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM reminders 
+        WHERE sent = 0 AND reminder_time <= datetime('now')
+        ORDER BY reminder_time
+    ''')
+    reminders = cursor.fetchall()
+    conn.close()
+    return reminders
+
+def mark_reminder_sent(reminder_id: int):
+    """Mark reminder as sent - implement this"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    cursor.execute('UPDATE reminders SET sent = 1 WHERE reminder_id = ?', (reminder_id,))
+    conn.commit()
+    conn.close()
+
+def get_todays_appointments(user_id: int):
+    """Get today's appointments - implement this"""
+    today = datetime.now().date()
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT * FROM appointments 
+        WHERE user_id = ? AND DATE(appointment_date) = ?
+        ORDER BY appointment_date
+    ''', (user_id, today))
+    appointments = cursor.fetchall()
+    conn.close()
+    return appointments
+
+# ===== ENTRY POINT =====
+
+if __name__ == "__main__":
+    # Import necessary modules
+    import sqlite3
+    from datetime import datetime, timedelta
+    from dateutil import parser
+    
+    # Start the bot
+    main()
+    
+
 
 
 
