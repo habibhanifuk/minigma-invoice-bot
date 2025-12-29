@@ -10879,7 +10879,7 @@ def main():
     
     # Get bot token from environment variable or hardcode it
     import os
-    BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
+    BOT_TOKEN = '8244318007:AAF1h90xrkbav-R0FHM68UxWYtN427EiTEI'
     
     if BOT_TOKEN == '8244318007:AAF1h90xrkbav-R0FHM68UxWYtN427EiTEI':
         print("❌ ERROR: Bot token not found!")
@@ -11023,6 +11023,7 @@ if __name__ == "__main__":
     # Start the bot
     main()
     
+
 
 
 
