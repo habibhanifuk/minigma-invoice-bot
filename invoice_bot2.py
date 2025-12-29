@@ -1,115 +1,4 @@
-# ==================================================
-# PART 1: IMPORTS AND SETUP (Updated with Scheduling)
-# ==================================================
-
-import os
-import logging
-import asyncio
-import sqlite3
-import io
-import time
-import requests
-import json
-import uuid
-import smtplib
-import threading
-from datetime import datetime, timedelta, date
-from typing import Dict, List, Optional, Tuple
-from enum import Enum
-from threading import Thread, Timer
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.application import MIMEApplication
-
-import pytz
-from flask import Flask
-from dateutil import parser
-from telegram import (
-    Update, InlineKeyboardButton, InlineKeyboardMarkup, 
-    BotCommand, ReplyKeyboardMarkup, KeyboardButton, 
-    ReplyKeyboardRemove
-)
-from telegram.ext import (
-    Application, CommandHandler, MessageHandler, 
-    CallbackQueryHandler, ContextTypes, filters, 
-    ConversationHandler
-)
-from telegram.constants import ParseMode
-
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import A4, letter
-from reportlab.lib.units import mm, inch
-from reportlab.lib.styles import getSampleStyleSheet
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, Image
-from reportlab.lib import colors
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-
-from PIL import Image as PILImage
-from dotenv import load_dotenv
-
-# Try to import premium_manager, but don't crash if it doesn't exist
-try:
-    from premium_manager import premium_manager
-    PREMIUM_MANAGER_AVAILABLE = True
-except ImportError:
-    PREMIUM_MANAGER_AVAILABLE = False
-    print("⚠️  premium_manager module not found. Premium features will be limited.")
-
-# Load environment variables
-load_dotenv()
-
-# Configure logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
-logger = logging.getLogger(__name__)
-
-# ===== BOT TOKEN HANDLING (SAFE & SECURE) =====
-
-def get_bot_token() -> Optional[str]:
-    """
-    Get bot token securely from multiple sources.
-    Order of priority:
-    1. Environment variable TELEGRAM_BOT_TOKEN
-    2. .env file (via python-dotenv)
-    3. bot_token.txt file
-    4. Returns None if no token found
-    """
-    # Method 1: Direct environment variable
-    token = os.getenv('TELEGRAM_BOT_TOKEN')
-    if token and token.strip():
-        return token.strip()
-    
-    # Method 2: .env file (already loaded via load_dotenv())
-    token = os.getenv('TELEGRAM_BOT_TOKEN')
-    if token and token.strip():
-        return token.strip()
-    
-    # Method 3: bot_token.txt file
-    try:
-        with open('bot_token.txt', 'r') as f:
-            token = f.read().strip()
-            if token and token != "YOUR_BOT_TOKEN_HERE":
-                return token
-    except FileNotFoundError:
-        pass
-    
-    # Method 4: Check for old token files
-    token_files = ['token.txt', '.bot_token', 'telegram_token.txt']
-    for filename in token_files:
-        try:
-            with open(filename, 'r') as f:
-                token = f.read().strip()
-                if token and token != "YOUR_BOT_TOKEN_HERE":
-                    return token
-        except FileNotFoundError:
-            continue
-    
-    return None
-
+# DELETE THESE LINES:
 # Get the bot token
 BOT_TOKEN = get_bot_token()
 
@@ -10674,6 +10563,7 @@ def main():
         import traceback
         traceback.print_exc()
     
+
 
 
 
