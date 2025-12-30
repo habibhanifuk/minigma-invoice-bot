@@ -6172,21 +6172,27 @@ def main():
         
         # ===== SCHEDULED TASKS =====
         
-        # Schedule regular jobs (optional)
-        job_queue = application.job_queue
-        
-        # Check for reminders every 5 minutes
-        job_queue.run_repeating(send_scheduled_reminders, interval=300, first=10)
-        
-        # Check for overdue appointments every hour
-        job_queue.run_repeating(check_overdue_appointments, interval=3600, first=60)
-        
-        # Send daily schedules at 8 AM
+        # Check if JobQueue is available
         try:
-            import datetime as dt
-            job_queue.run_daily(send_daily_schedule, time=dt.time(hour=8, minute=0))
+            # Check if job_queue exists
+            if hasattr(application, 'job_queue') and application.job_queue is not None:
+                job_queue = application.job_queue
+                
+                # Check for reminders every 5 minutes
+                job_queue.run_repeating(send_scheduled_reminders, interval=300, first=10)
+                
+                # Check for overdue appointments every hour
+                job_queue.run_repeating(check_overdue_appointments, interval=3600, first=60)
+                
+                # Send daily schedules at 8 AM
+                import datetime as dt
+                job_queue.run_daily(send_daily_schedule, time=dt.time(hour=8, minute=0))
+                
+                print("✅ Scheduled tasks configured")
+            else:
+                print("⚠️  JobQueue not available - scheduled tasks disabled")
         except Exception as e:
-            print(f"⚠️  Could not schedule daily tasks: {e}")
+            print(f"⚠️  Could not configure scheduled tasks: {e}")
         
         # ===== START HEALTH CHECK (OPTIONAL) =====
         try:
@@ -10347,6 +10353,7 @@ def main():
         import traceback
         traceback.print_exc()
     
+
 
 
 
