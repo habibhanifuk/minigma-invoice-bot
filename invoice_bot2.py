@@ -10262,23 +10262,19 @@ def get_bot_token() -> Optional[str]:
     return None
 
 def main():
-    """Start the bot"""
     print("🤖 Starting Minigma Business Suite Bot...")
     
-    # Get bot token using the secure function
     BOT_TOKEN = get_bot_token()
     
-    # Check if token is available
     if not BOT_TOKEN:
         print("❌ ERROR: Telegram Bot Token not found!")
-        print("\nTo fix this, please do ONE of the following:")
-        print("1. Create a file named 'bot_token.txt' and paste your bot token in it")
-        print("2. Set environment variable: export TELEGRAM_BOT_TOKEN='your_token'")
-        print("\nGet your bot token from @BotFather on Telegram")
-        print("The bot will exit now. Please set up your token and try again.")
+        print("\nTo fix this:")
+        print("1. Set BOT_TOKEN environment variable in Koyeb")
+        print("2. Or create 'bot_token.txt' with your Telegram bot token")
+        print("\nGet token from @BotFather on Telegram")
         return
-        
-    print(f"✅ Bot token loaded")
+    
+    print(f"✅ Token loaded: {BOT_TOKEN[:15]}...")
     
     try:
         # Create the Application
@@ -10376,6 +10372,7 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
 
 
