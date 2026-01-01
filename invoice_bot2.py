@@ -10277,18 +10277,7 @@ def main():
         print("\nGet your bot token from @BotFather on Telegram")
         print("The bot will exit now. Please set up your token and try again.")
         return
-    
-    # Security check - don't accept placeholder or exposed tokens
-    if BOT_TOKEN == "YOUR_BOT_TOKEN_HERE" or BOT_TOKEN.startswith("8244318007:"):
-        print("❌ SECURITY ERROR: Using placeholder or exposed token!")
-        print("Your token has been exposed publicly. Please:")
-        print("1. Go to @BotFather on Telegram")
-        print("2. Send /mybots")
-        print("3. Select your bot")
-        print("4. Choose 'API Token' → 'Revoke current token'")
-        print("5. Get a NEW token and update your configuration")
-        return
-    
+        
     print(f"✅ Bot token loaded")
     
     try:
@@ -10387,4 +10376,5 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
