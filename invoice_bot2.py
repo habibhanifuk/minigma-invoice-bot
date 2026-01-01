@@ -6115,26 +6115,25 @@ def create_health_check():
 # ===== BOT EXECUTION & STARTUP =====
 def main():
     """Start and run the Telegram bot"""
-    print("🤖 Starting Minigma Business Suite Bot...")
+    print("🚨 EMERGENCY MODE: Using hardcoded token for testing")
     
-    # Get bot token using the MAIN token function
-    BOT_TOKEN = get_bot_token()  # ← CHANGE THIS LINE
+    # TEMPORARY: HARDCODED TOKEN - REPLACE WITH YOURS
+    BOT_TOKEN = "8120806270:AAHEHOs2reAHaHQt9ZfEdQFWa4GVcOKfD9Y"
     
-    # Debug: Show what token we got
-    if BOT_TOKEN:
-        print(f"🔍 Token loaded: {BOT_TOKEN[:15]}...")
-    else:
-        print("❌ ERROR: Telegram Bot Token not found!")
-        print("\nTo fix this:")
-        print("1. Set BOT_TOKEN environment variable in Koyeb")
-        print("2. Or create 'bot_token.txt' with your Telegram bot token")
-        print("\nGet token from @BotFather on Telegram")
+    # ⚠️ IMPORTANT: Replace the above with YOUR actual token
+    # It should match what you see in Koyeb environment variables
+    
+    if not BOT_TOKEN or BOT_TOKEN == "8120806270:AAHEHOs2reAHaHQt9ZfEdQFWa4GVcOKfD9Y":
+        print("❌ Please replace the hardcoded token with your actual token")
+        print(f"Current token: {BOT_TOKEN}")
         return
     
-    print("✅ Bot token accepted")
+    print(f"✅ USING TOKEN: {BOT_TOKEN[:15]}...")
+    
+    # NOW continue with your existing code
+    print("🤖 Starting Minigma Business Suite Bot...")
     
     try:
-        # Create the Application
         application = Application.builder().token(BOT_TOKEN).build()
         
         # ===== REGISTER COMMAND HANDLERS =====
@@ -10372,6 +10371,7 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
 
 
