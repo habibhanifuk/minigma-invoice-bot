@@ -6117,17 +6117,17 @@ def main():
     """Start and run the Telegram bot"""
     print("🤖 Starting Minigma Business Suite Bot...")
     
-    # Get bot token using simple method
-    BOT_TOKEN = get_bot_token_simple()
+    # Get bot token using the MAIN token function
+    BOT_TOKEN = get_bot_token()  # ← CHANGE THIS LINE
     
     # Debug: Show what token we got
     if BOT_TOKEN:
         print(f"🔍 Token loaded: {BOT_TOKEN[:15]}...")
     else:
-        print("❌ ERROR: No bot token found!")
+        print("❌ ERROR: Telegram Bot Token not found!")
         print("\nTo fix this:")
-        print("1. Create 'bot_token.txt' with your Telegram bot token")
-        print("2. Or set TELEGRAM_BOT_TOKEN environment variable")
+        print("1. Set BOT_TOKEN environment variable in Koyeb")
+        print("2. Or create 'bot_token.txt' with your Telegram bot token")
         print("\nGet token from @BotFather on Telegram")
         return
     
@@ -10376,5 +10376,6 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
 
