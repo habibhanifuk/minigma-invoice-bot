@@ -73,22 +73,26 @@ def get_bot_token() -> Optional[str]:
     """
     Get bot token securely from multiple sources.
     Order of priority:
-    1. Environment variable TELEGRAM_BOT_TOKEN
-    2. .env file (via python-dotenv)
-    3. bot_token.txt file
-    4. Returns None if no token found
+    1. Environment variable BOT_TOKEN (for Koyeb)
+    2. Environment variable TELEGRAM_BOT_TOKEN (alternative)
+    3. .env file (via python-dotenv)
+    4. bot_token.txt file
+    5. Returns None if no token found
     """
-    # Method 1: Direct environment variable
+    # Method 1: BOT_TOKEN environment variable (for Koyeb)
+    token = os.getenv('BOT_TOKEN')
+    if token and token.strip():
+        return token.strip()
+    
+    # Method 2: TELEGRAM_BOT_TOKEN environment variable (alternative)
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if token and token.strip():
         return token.strip()
     
-    # Method 2: .env file (already loaded via load_dotenv())
-    token = os.getenv('TELEGRAM_BOT_TOKEN')
-    if token and token.strip():
-        return token.strip()
+    # Method 3: .env file (already loaded via load_dotenv())
+    # Note: load_dotenv() loads into os.environ, so this is already covered above
     
-    # Method 3: bot_token.txt file
+    # Method 4: bot_token.txt file
     try:
         with open('bot_token.txt', 'r') as f:
             token = f.read().strip()
@@ -97,7 +101,7 @@ def get_bot_token() -> Optional[str]:
     except FileNotFoundError:
         pass
     
-    # Method 4: Check for old token files
+    # Method 5: Check for old token files
     token_files = ['token.txt', '.bot_token', 'telegram_token.txt']
     for filename in token_files:
         try:
@@ -109,9 +113,6 @@ def get_bot_token() -> Optional[str]:
             continue
     
     return None
-
-# DO NOT CALL get_bot_token() HERE! The main() function in Part 6 will call it.
-print("✅ Token handling function defined")
 
 # Configuration constants
 GRACE_PERIOD_DAYS = 14
@@ -5957,22 +5958,6 @@ from telegram.ext import ContextTypes, Application, CommandHandler, MessageHandl
 
 logger = logging.getLogger(__name__)
 
-# ===== TOKEN HANDLING =====
-def get_bot_token_simple() -> Optional[str]:
-    """
-    Simple token getter - just reads from bot_token.txt
-    """
-    try:
-        with open('bot_token.txt', 'r') as f:
-            token = f.read().strip()
-            if token:
-                return token
-    except FileNotFoundError:
-        pass
-    
-    # Fallback to environment variable
-    return os.getenv('TELEGRAM_BOT_TOKEN')
-
 # ===== MISSING HELPER FUNCTIONS (STUBS) =====
 # (Keep all your existing helper functions as they are)
 # [All your existing helper functions remain unchanged...]
@@ -10402,3 +10387,4 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
