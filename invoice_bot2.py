@@ -6115,24 +6115,22 @@ def create_health_check():
 # ===== BOT EXECUTION & STARTUP =====
 def main():
     """Start and run the Telegram bot"""
-    print("🚨 EMERGENCY MODE: Using hardcoded token for testing")
-    
-    # TEMPORARY: HARDCODED TOKEN - REPLACE WITH YOURS
-    BOT_TOKEN = "8120806270:AAHEHOs2reAHaHQt9ZfEdQFWa4GVcOKfD9Y"
-    
-    # ⚠️ IMPORTANT: Replace the above with YOUR actual token
-    # It should match what you see in Koyeb environment variables
-    
-    if not BOT_TOKEN or BOT_TOKEN == "8120806270:AAHEHOs2reAHaHQt9ZfEdQFWa4GVcOKfD9Y":
-        print("❌ Please replace the hardcoded token with your actual token")
-        print(f"Current token: {BOT_TOKEN}")
-        return
-    
-    print(f"✅ USING TOKEN: {BOT_TOKEN[:15]}...")
-    
-    # NOW continue with your existing code
     print("🤖 Starting Minigma Business Suite Bot...")
     
+    # Get token from environment variable ONLY
+    BOT_TOKEN = os.getenv('BOT_TOKEN')
+    
+    if not BOT_TOKEN:
+        print("❌ ERROR: BOT_TOKEN environment variable not found!")
+        print("To fix this:")
+        print("1. Go to Koyeb → Service → Environment Variables")
+        print("2. Add: Name='BOT_TOKEN', Value='your_token_here'")
+        print("\nGet a NEW token from @BotFather (old one is compromised)")
+        return
+    
+    print(f"✅ Token loaded: {BOT_TOKEN[:15]}...")
+    
+    # Continue with your existing code...
     try:
         application = Application.builder().token(BOT_TOKEN).build()
         
@@ -10371,6 +10369,7 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
 
 
