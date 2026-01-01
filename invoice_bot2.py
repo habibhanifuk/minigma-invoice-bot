@@ -10352,85 +10352,54 @@ def main():
         print(f"❌ Error starting bot: {e}")
         import traceback
         traceback.print_exc()
-        # ==================================================
-# KOYEB COMPATIBILITY LAYER
+        
+import os
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+# ==================================================
+# KOYEB WEB SERVICE COMPATIBILITY LAYER
 # ==================================================
 
-import os
-import sys
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b'Telegram Bot is running!')
+    
+    def log_message(self, format, *args):
+        # Disable HTTP logging noise
+        pass
 
-def check_koyeb_environment():
-    """Check if running on Koyeb and configure"""
+def run_http_server():
+    """Run a simple HTTP server on port 8000 for Koyeb health checks"""
+    server = HTTPServer(('0.0.0.0', 8000), HealthHandler)
+    print("✅ HTTP server running on port 8000 for Koyeb health checks")
+    server.serve_forever()
+
+if __name__ == "__main__":
+    # Check if running on Koyeb
     if 'KOYEB' in os.environ or 'KOYEB_SERVICE_ID' in os.environ:
         print("=" * 50)
-        print("🚀 Running on KOYEB - 24/7 Hosting!")
-        print("✅ Perfect for polling-based Telegram bots")
+        print("🌐 Running as Koyeb Web Service")
+        print("🤖 Bot will run in background")
+        print("✅ HTTP server on port 8000 for health checks")
         print("=" * 50)
         
-        # Koyeb-specific optimizations
-        os.environ['PYTHONUNBUFFERED'] = '1'  # Better logging
+        # Start HTTP server in background thread
+        http_thread = threading.Thread(target=run_http_server, daemon=True)
+        http_thread.start()
         
-        # Disable any webhook code if present
-        if 'webhook' in sys.argv:
-            print("⚠️  Webhooks disabled - using polling on Koyeb")
+        # Give HTTP server a moment to start
+        import time
+        time.sleep(2)
         
-        return True
-    return False
-
-# Check environment
-is_koyeb = check_koyeb_environment()
-
-# ===== ENTRY POINT =====
-if __name__ == "__main__":
-    # Check imports
-    try:
-        from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
-        print("✅ Telegram libraries imported successfully")
-    except ImportError as e:
-        print(f"❌ Missing Telegram library: {e}")
-        print("Install with: pip install python-telegram-bot")
-        sys.exit(1)
-    
-    # Run the bot
-    main()
-    
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        # Run your bot in main thread
+        main()
+    else:
+        # Run normally locally
+        main()
 
 
 
