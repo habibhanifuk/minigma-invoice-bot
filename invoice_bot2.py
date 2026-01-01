@@ -10352,7 +10352,49 @@ def main():
         print(f"❌ Error starting bot: {e}")
         import traceback
         traceback.print_exc()
+        # ==================================================
+# KOYEB COMPATIBILITY LAYER
+# ==================================================
+
+import os
+import sys
+
+def check_koyeb_environment():
+    """Check if running on Koyeb and configure"""
+    if 'KOYEB' in os.environ or 'KOYEB_SERVICE_ID' in os.environ:
+        print("=" * 50)
+        print("🚀 Running on KOYEB - 24/7 Hosting!")
+        print("✅ Perfect for polling-based Telegram bots")
+        print("=" * 50)
+        
+        # Koyeb-specific optimizations
+        os.environ['PYTHONUNBUFFERED'] = '1'  # Better logging
+        
+        # Disable any webhook code if present
+        if 'webhook' in sys.argv:
+            print("⚠️  Webhooks disabled - using polling on Koyeb")
+        
+        return True
+    return False
+
+# Check environment
+is_koyeb = check_koyeb_environment()
+
+# ===== ENTRY POINT =====
+if __name__ == "__main__":
+    # Check imports
+    try:
+        from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+        print("✅ Telegram libraries imported successfully")
+    except ImportError as e:
+        print(f"❌ Missing Telegram library: {e}")
+        print("Install with: pip install python-telegram-bot")
+        sys.exit(1)
     
+    # Run the bot
+    main()
+    
+
 
 
 
