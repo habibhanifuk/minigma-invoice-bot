@@ -10227,16 +10227,20 @@ async def show_agenda_view(update, user_id: int, target_date: datetime):
 def get_bot_token() -> Optional[str]:
     """
     Get bot token securely from multiple sources.
-    This should match the function in Part 1.
     """
     import os
     
-    # Method 1: Direct environment variable
+    # Method 1: BOT_TOKEN environment variable (for Koyeb)
+    token = os.getenv('BOT_TOKEN')
+    if token and token.strip():
+        return token.strip()
+    
+    # Method 2: TELEGRAM_BOT_TOKEN environment variable (alternative)
     token = os.getenv('TELEGRAM_BOT_TOKEN')
     if token and token.strip():
         return token.strip()
     
-    # Method 2: bot_token.txt file
+    # Method 3: bot_token.txt file
     try:
         with open('bot_token.txt', 'r') as f:
             token = f.read().strip()
@@ -10244,17 +10248,6 @@ def get_bot_token() -> Optional[str]:
                 return token
     except FileNotFoundError:
         pass
-    
-    # Method 3: Check for old token files
-    token_files = ['token.txt', '.bot_token', 'telegram_token.txt']
-    for filename in token_files:
-        try:
-            with open(filename, 'r') as f:
-                token = f.read().strip()
-                if token and token != "YOUR_BOT_TOKEN_HERE":
-                    return token
-        except FileNotFoundError:
-            continue
     
     return None
 
@@ -10369,6 +10362,7 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
 
 
