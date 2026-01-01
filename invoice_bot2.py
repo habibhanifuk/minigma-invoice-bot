@@ -6209,7 +6209,7 @@ def main():
         import traceback
         traceback.print_exc()
 
-python
+# python
 # ==================================================
 # KOYEB COMPATIBILITY LAYER
 # ==================================================
@@ -6234,33 +6234,6 @@ def run_http_server():
     server = HTTPServer(('0.0.0.0', 8000), HealthHandler)
     print("✅ HTTP server running on port 8000 for Koyeb health checks")
     server.serve_forever()
-
-# ==================================================
-# ENTRY POINT - MUST BE AT VERY END OF FILE
-# ==================================================
-
-if __name__ == "__main__":
-    # Check if running on Koyeb
-    if 'KOYEB' in os.environ or 'KOYEB_SERVICE_ID' in os.environ:
-        print("=" * 50)
-        print("🌐 Running on KOYEB - 24/7 Hosting!")
-        print("🤖 Bot will run in background")
-        print("✅ HTTP server on port 8000 for health checks")
-        print("=" * 50)
-        
-        # Start HTTP server in background thread
-        http_thread = threading.Thread(target=run_http_server, daemon=True)
-        http_thread.start()
-        
-        # Give HTTP server a moment to start
-        import time
-        time.sleep(2)
-        
-        # Run the bot
-        main()
-    else:
-        # Run normally locally
-        main()
     
 # ==================================================
 # PART 7: EMAIL AND SMS DELIVERY (Updated with Appointment Features)
@@ -10398,16 +10371,20 @@ class HealthHandler(BaseHTTPRequestHandler):
 def run_http_server():
     """Run a simple HTTP server on port 8000 for Koyeb health checks"""
     server = HTTPServer(('0.0.0.0', 8000), HealthHandler)
-    print("✅ HTTP server running on port 8000 for Koyeb health checks")
+    print("HTTP server running on port 8000 for Koyeb health checks")
     server.serve_forever()
+
+# ==================================================
+# ENTRY POINT - AT VERY END OF FILE
+# ==================================================
 
 if __name__ == "__main__":
     # Check if running on Koyeb
     if 'KOYEB' in os.environ or 'KOYEB_SERVICE_ID' in os.environ:
         print("=" * 50)
-        print("🌐 Running as Koyeb Web Service")
-        print("🤖 Bot will run in background")
-        print("✅ HTTP server on port 8000 for health checks")
+        print("Running on KOYEB - 24/7 Hosting!")
+        print("Bot will run in background")
+        print("HTTP server on port 8000 for health checks")
         print("=" * 50)
         
         # Start HTTP server in background thread
@@ -10424,14 +10401,4 @@ if __name__ == "__main__":
         # Run normally locally
         main()
 
-
-
-
-
-
-
-
-
-
-
-
+# NOTHING AFTER THIS LINE
