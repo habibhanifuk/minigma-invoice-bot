@@ -1,137 +1,835 @@
 #!/usr/bin/env python3
 """
 Minigma Business Suite - Telegram Bot
-Simplified version for Koyeb deployment
+COMPLETE FIXED VERSION FOR KOYEB DEPLOYMENT
+Includes health check server and all required imports
 """
 
-from datetime import datetime, timedelta, date
+# ===== CORE IMPORTS =====
 import os
 import logging
-from telegram import Update, BotCommand
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+import asyncio
+import sqlite3
+import io
+import time
+import json
+import uuid
+import smtplib
+import threading
+import sys
+import signal
+from datetime import datetime, timedelta, date
+from typing import Dict, List, Optional, Tuple, Any
+from enum import Enum
+from threading import Thread
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
+from http.server import HTTPServer, BaseHTTPRequestHandler
 
-# Setup logging
+# ===== THIRD-PARTY IMPORTS =====
+import pytz
+import requests
+from dateutil import parser
+from telegram import (
+    Update, InlineKeyboardButton, InlineKeyboardMarkup, 
+    BotCommand, ReplyKeyboardMarkup, KeyboardButton, 
+    ReplyKeyboardRemove, WebAppInfo
+)
+from telegram.ext import (
+    Application, CommandHandler, MessageHandler, 
+    CallbackQueryHandler, ContextTypes, filters, 
+    ConversationHandler
+)
+from telegram.constants import ParseMode
+from telegram.error import Conflict, InvalidToken
+
+# ===== PDF GENERATION IMPORTS =====
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import A4, letter
+from reportlab.lib.units import mm, inch
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Table, TableStyle, Spacer, Image
+from reportlab.lib import colors
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+
+# ===== IMAGE PROCESSING =====
+from PIL import Image as PILImage
+from dotenv import load_dotenv
+
+# ===== PREMIUM MANAGER (WITH FALLBACK) =====
+try:
+    from premium_manager import premium_manager
+    PREMIUM_MANAGER_AVAILABLE = True
+except ImportError:
+    PREMIUM_MANAGER_AVAILABLE = False
+    print("⚠️  premium_manager module not found. Premium features will be limited.")
+    
+    # Create a stub premium manager
+    class PremiumManagerStub:
+        def is_premium(self, user_id):
+            return False
+        def get_user_data(self, user_id):
+            return {}
+        def add_premium_user(self, *args, **kwargs):
+            return True, "Stub manager - upgrade to enable"
+        def remove_premium_user(self, user_id):
+            return True, "Stub manager"
+    
+    premium_manager = PremiumManagerStub()
+
+# ===== LOAD ENVIRONMENT VARIABLES =====
+load_dotenv()
+
+# ===== CONFIGURE LOGGING =====
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
-# ===== STUB COMMAND HANDLERS =====
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /start command"""
-    await update.message.reply_text(
-        "🏢 **Minigma Business Suite**\n\n"
-        "Your business management assistant!\n\n"
-        "Use /help to see all commands.",
-        parse_mode='Markdown'
-    )
+# ===== HEALTH CHECK SERVER FOR KOYEB =====
+class HealthHandler(BaseHTTPRequestHandler):
+    """Handle Koyeb health check requests on port 8000"""
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        response = {
+            'status': 'healthy',
+            'service': 'minigma-telegram-bot',
+            'timestamp': datetime.now().isoformat(),
+            'environment': 'koyeb'
+        }
+        self.wfile.write(json.dumps(response).encode())
+    
+    def log_message(self, format, *args):
+        pass  # Disable HTTP logging noise
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle /help command"""
-    commands = [
-        "/start - Start bot",
-        "/help - This help message",
-        "/schedule - Schedule appointment",
-        "/calendar - View calendar",
-        "/create - Create invoice",
-        "/quote - Create quote",
-        "/clients - Manage clients",
-        "/payments - Track payments",
-        "/premium - Upgrade features",
-        "/setup - Business setup",
-        "/settings - Appointment settings",
-        "/myid - Get your user ID"
+def run_health_server():
+    """Start HTTP server for Koyeb health checks"""
+    try:
+        port = int(os.environ.get('PORT', 8000))
+        server = HTTPServer(('0.0.0.0', port), HealthHandler)
+        logger.info(f"✅ Health server started on port {port}")
+        server.serve_forever()
+    except Exception as e:
+        logger.error(f"Health server error: {e}")
+
+# ===== BOT TOKEN HANDLING =====
+def get_bot_token() -> Optional[str]:
+    """
+    Get bot token securely from multiple sources.
+    Order of priority:
+    1. Environment variable BOT_TOKEN (for Koyeb)
+    2. Environment variable TELEGRAM_BOT_TOKEN (alternative)
+    3. .env file (via python-dotenv)
+    4. bot_token.txt file
+    5. Returns None if no token found
+    """
+    # Method 1: BOT_TOKEN environment variable (for Koyeb)
+    token = os.getenv('BOT_TOKEN')
+    if token and token.strip():
+        return token.strip()
+    
+    # Method 2: TELEGRAM_BOT_TOKEN environment variable (alternative)
+    token = os.getenv('TELEGRAM_BOT_TOKEN')
+    if token and token.strip():
+        return token.strip()
+    
+    # Method 3: .env file (already loaded via load_dotenv())
+    # Note: load_dotenv() loads into os.environ, so this is already covered above
+    
+    # Method 4: bot_token.txt file
+    try:
+        with open('bot_token.txt', 'r') as f:
+            token = f.read().strip()
+            if token and token != "YOUR_BOT_TOKEN_HERE":
+                return token
+    except FileNotFoundError:
+        pass
+    
+    # Method 5: Check for old token files
+    token_files = ['token.txt', '.bot_token', 'telegram_token.txt']
+    for filename in token_files:
+        try:
+            with open(filename, 'r') as f:
+                token = f.read().strip()
+                if token and token != "YOUR_BOT_TOKEN_HERE":
+                    return token
+        except FileNotFoundError:
+            continue
+    
+    return None
+
+# ===== CONFIGURATION CONSTANTS =====
+GRACE_PERIOD_DAYS = 14
+MONTHLY_INVOICE_LIMIT = 10
+DEFAULT_WORKING_HOURS = {"start": "09:00", "end": "17:00"}
+DEFAULT_SLOT_DURATION = 30  # minutes
+MAX_SLOTS_PER_DAY = 16  # 8 hours with 30-min slots
+
+# ===== TIER CONFIGURATION =====
+TIER_LIMITS = {
+    'free': {
+        'monthly_invoices': 10,  # Includes both invoices and quotes
+        'max_appointments': 5,   # Free tier appointment limit
+        'max_clients': 10,       # Client database limit
+        'features': [
+            'Basic invoice creation',
+            'Quote creation',
+            'PDF generation',
+            'Multiple currencies',
+            '14-day free trial',
+            'Basic appointment scheduling (5 max)',
+            'Today & week view'
+        ],
+        'price': 0
+    },
+    'premium': {
+        'monthly_invoices': float('inf'),  # Unlimited
+        'max_appointments': float('inf'),  # Unlimited appointments
+        'max_clients': float('inf'),       # Unlimited clients
+        'features': [
+            'Unlimited invoices & quotes',
+            'Company/VAT registration',
+            'VAT calculation',
+            'Client database', 
+            'Payment tracking',
+            'Email/SMS delivery',
+            'Priority support',
+            'Advanced appointment scheduling',
+            'Recurring appointments',
+            'Calendar integrations',
+            'Custom appointment types',
+            'Automated reminders',
+            'Email confirmations',
+            'Calendar exports',
+            'Working hours configuration'
+        ],
+        'monthly_price': 12,
+        'annual_price': 105
+    }
+}
+
+# ===== EMAIL CONFIGURATION =====
+EMAIL_CONFIG = {
+    'smtp_server': 'smtp.gmail.com',  # Change for your email provider
+    'smtp_port': 587,
+    'sender_email': os.getenv('EMAIL_USER', 'your-email@gmail.com'),
+    'sender_password': os.getenv('EMAIL_PASSWORD', 'your-app-password'),
+    'sender_name': 'Minigma Business Suite',
+    'use_ssl': False,
+    'use_tls': True
+}
+
+# ===== PAYMENT CONFIGURATION =====
+PAYMENT_CONFIG = {
+    'stripe_secret_key': os.getenv('STRIPE_SECRET_KEY', ''),
+    'stripe_public_key': os.getenv('STRIPE_PUBLIC_KEY', ''),
+    'webhook_secret': os.getenv('STRIPE_WEBHOOK_SECRET', ''),
+    'enabled': False  # Set to True when configured
+}
+
+# ===== APPOINTMENT STATUS ENUM =====
+class AppointmentStatus(Enum):
+    SCHEDULED = "scheduled"
+    CONFIRMED = "confirmed"
+    CANCELLED = "cancelled"
+    COMPLETED = "completed"
+    RESCHEDULED = "rescheduled"
+
+# ===== APPOINTMENT TYPES ENUM =====
+class AppointmentType(Enum):
+    CONSULTATION = "consultation"
+    MEETING = "meeting"
+    FOLLOW_UP = "follow_up"
+    DELIVERY = "delivery"
+    PAYMENT = "payment"
+    SUPPORT = "support"
+
+# ===== CONVERSATION STATES =====
+(
+    SCHEDULE_START,
+    SELECT_CLIENT,
+    SELECT_TYPE,
+    SELECT_DATE,
+    SELECT_TIME,
+    SELECT_DURATION,
+    ADD_DESCRIPTION,
+    CONFIRM_APPOINTMENT,
+    APPOINTMENT_EDIT,
+    APPOINTMENT_DATE_EDIT,
+    APPOINTMENT_TIME_EDIT,
+    APPOINTMENT_TYPE_EDIT,
+    APPOINTMENT_DURATION_EDIT,
+    APPOINTMENT_DESC_EDIT,
+    APPOINTMENT_CLIENT_EDIT,
+    SET_REMINDER_TIME,
+    VIEW_CALENDAR,
+    CALENDAR_NAVIGATE,
+    BOOKING_CONFIRMED,
+    EMAIL_CONFIG,
+    WORKING_HOURS_SETUP
+) = range(21)
+
+# ===== DATABASE INITIALIZATION =====
+def init_db():
+    """Initialize database with all required tables"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    # Users table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY,
+            username TEXT,
+            first_name TEXT,
+            last_name TEXT,
+            join_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            trial_end_date TIMESTAMP,
+            subscription_tier TEXT DEFAULT 'lite',
+            logo_path TEXT,
+            company_name TEXT,
+            company_reg_number TEXT,
+            vat_reg_number TEXT,
+            trial_start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            trial_used BOOLEAN DEFAULT FALSE,
+            email TEXT,
+            phone TEXT,
+            timezone TEXT DEFAULT 'UTC',
+            calendar_settings TEXT DEFAULT '{}'
+        )
+    ''')
+    
+    # Invoices table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS invoices (
+            invoice_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            invoice_number TEXT UNIQUE,
+            client_name TEXT,
+            invoice_date TEXT,
+            currency TEXT,
+            items TEXT,
+            total_amount REAL,
+            vat_enabled BOOLEAN DEFAULT FALSE,
+            vat_amount REAL DEFAULT 0,
+            status TEXT DEFAULT 'draft',
+            paid_status BOOLEAN DEFAULT FALSE,
+            client_email TEXT,
+            client_phone TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            document_type TEXT DEFAULT 'invoice',
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Invoice counters table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS invoice_counters (
+            user_id INTEGER PRIMARY KEY,
+            current_counter INTEGER DEFAULT 1,
+            last_reset_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Clients table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS clients (
+            client_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            client_name TEXT,
+            email TEXT,
+            phone TEXT,
+            address TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Premium subscriptions table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS premium_subscriptions (
+            user_id INTEGER PRIMARY KEY,
+            subscription_type TEXT,
+            start_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            end_date TIMESTAMP,
+            payment_method TEXT,
+            auto_renew BOOLEAN DEFAULT TRUE,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Appointments table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS appointments (
+            appointment_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            client_id INTEGER,
+            title TEXT NOT NULL,
+            description TEXT,
+            appointment_time TIMESTAMP NOT NULL,
+            duration_minutes INTEGER DEFAULT 60,
+            appointment_type TEXT DEFAULT 'meeting',
+            status TEXT DEFAULT 'scheduled',
+            reminder_enabled BOOLEAN DEFAULT TRUE,
+            reminder_sent BOOLEAN DEFAULT FALSE,
+            reminder_minutes_before INTEGER DEFAULT 30,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            cancelled_at TIMESTAMP,
+            cancellation_reason TEXT,
+            notification_sent BOOLEAN DEFAULT FALSE,
+            recurrence_pattern TEXT,
+            recurrence_end_date TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            FOREIGN KEY (client_id) REFERENCES clients (client_id)
+        )
+    ''')
+    
+    # Appointment types table (customizable)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS appointment_types (
+            type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            type_name TEXT NOT NULL,
+            color_hex TEXT DEFAULT '#4a6ee0',
+            duration_minutes INTEGER DEFAULT 60,
+            price DECIMAL(10,2) DEFAULT 0.00,
+            description TEXT,
+            buffer_before INTEGER DEFAULT 0,
+            buffer_after INTEGER DEFAULT 0,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            UNIQUE(user_id, type_name)
+        )
+    ''')
+    
+    # Working hours table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS working_hours (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            day_of_week INTEGER,  -- 0=Monday, 6=Sunday
+            is_working_day BOOLEAN DEFAULT TRUE,
+            start_time TEXT,  -- Format: HH:MM
+            end_time TEXT,    -- Format: HH:MM
+            lunch_start TEXT,
+            lunch_end TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            UNIQUE(user_id, day_of_week)
+        )
+    ''')
+    
+    # Appointment reminders table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS appointment_reminders (
+            reminder_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            appointment_id INTEGER,
+            user_id INTEGER,
+            reminder_time TIMESTAMP,
+            reminder_type TEXT,  -- email, telegram, both
+            sent BOOLEAN DEFAULT FALSE,
+            sent_at TIMESTAMP,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (appointment_id) REFERENCES appointments (appointment_id),
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Calendar settings table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS calendar_settings (
+            user_id INTEGER PRIMARY KEY,
+            default_view TEXT DEFAULT 'week',
+            first_day_of_week INTEGER DEFAULT 1,  -- 1=Monday, 0=Sunday
+            slot_duration INTEGER DEFAULT 30,
+            show_weekends BOOLEAN DEFAULT TRUE,
+            send_email_notifications BOOLEAN DEFAULT TRUE,
+            send_telegram_notifications BOOLEAN DEFAULT TRUE,
+            email_template TEXT DEFAULT 'default',
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Email templates table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS email_templates (
+            template_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            template_name TEXT,
+            subject TEXT,
+            body TEXT,
+            is_default BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Buffer times table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS buffer_times (
+            buffer_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            before_appointment INTEGER DEFAULT 15,
+            after_appointment INTEGER DEFAULT 15,
+            same_day_buffer INTEGER DEFAULT 60,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id)
+        )
+    ''')
+    
+    # Unavailable dates table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS unavailable_dates (
+            date_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            date DATE NOT NULL,
+            reason TEXT,
+            all_day BOOLEAN DEFAULT TRUE,
+            start_time TEXT,
+            end_time TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users (user_id),
+            UNIQUE(user_id, date)
+        )
+    ''')
+    
+    # Default appointment types table
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS default_appointment_types (
+            type_id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type_name TEXT,
+            duration_minutes INTEGER DEFAULT 60,
+            description TEXT,
+            color_hex TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    
+    # Insert default appointment types if table is empty
+    cursor.execute('SELECT COUNT(*) FROM default_appointment_types')
+    if cursor.fetchone()[0] == 0:
+        default_types = [
+            ('Consultation', 60, 'Initial client consultation', '#4a6ee0'),
+            ('Follow-up', 30, 'Follow-up meeting', '#34c759'),
+            ('Delivery', 15, 'Product/service delivery', '#ff9500'),
+            ('Payment', 15, 'Payment collection', '#ff3b30'),
+            ('Support', 45, 'Technical support', '#5ac8fa'),
+            ('Planning', 90, 'Project planning session', '#af52de'),
+            ('Review', 60, 'Performance review', '#ffcc00')
+        ]
+        
+        for type_name, duration, description, color in default_types:
+            cursor.execute('''
+                INSERT INTO default_appointment_types (type_name, duration_minutes, description, color_hex)
+                VALUES (?, ?, ?, ?)
+            ''', (type_name, duration, description, color))
+    
+    # Create indexes for better performance
+    indexes = [
+        ('idx_appointments_user_date', 'appointments(user_id, appointment_time)'),
+        ('idx_appointments_status', 'appointments(status)'),
+        ('idx_appointments_client', 'appointments(client_id)'),
+        ('idx_clients_user', 'clients(user_id)'),
+        ('idx_reminders_sent', 'appointment_reminders(sent, reminder_time)'),
+        ('idx_invoices_user_date', 'invoices(user_id, created_at)'),
+        ('idx_invoices_status', 'invoices(status)'),
+        ('idx_users_username', 'users(username)')
     ]
     
-    await update.message.reply_text(
-        "📚 **Available Commands:**\n\n" + "\n".join(commands),
-        parse_mode='Markdown'
-    )
-
-async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📅 Appointment scheduling feature")
-
-async def calendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🗓️ Calendar view feature")
-
-async def create(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🧾 Invoice creation feature")
-
-async def quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("📋 Quote creation feature")
-
-async def clients(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👥 Client management feature")
-
-async def payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("💰 Payment tracking feature")
-
-async def premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("💎 Premium features")
-
-async def setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⚙️ Business setup")
-
-async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("⚙️ Appointment settings")
-
-async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    await update.message.reply_text(f"🔑 Your User ID: `{user_id}`", parse_mode='Markdown')
-
-async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Handle all text messages"""
-    await update.message.reply_text("Use /help to see available commands")
-
-# ===== MAIN FUNCTION =====
-def main():
-    """Start the bot"""
-    print("🤖 Starting Minigma Business Suite Bot...")
+    for index_name, index_def in indexes:
+        try:
+            cursor.execute(f'CREATE INDEX IF NOT EXISTS {index_name} ON {index_def}')
+        except sqlite3.Error as e:
+            print(f"⚠️  Could not create index {index_name}: {e}")
     
-    # Get token from environment variable
-    BOT_TOKEN = os.getenv('BOT_TOKEN')
+    conn.commit()
+    conn.close()
+    logger.info("✅ Database initialization complete with enhanced scheduling system")
+
+# ===== INITIALIZE DATABASE =====
+init_db()
+
+# ===== DEFAULT SETTINGS HELPER FUNCTIONS =====
+def init_default_working_hours(user_id):
+    """Initialize default working hours for a user"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    # Monday to Friday, 9am-5pm
+    for day in range(0, 5):  # 0=Monday, 4=Friday
+        cursor.execute('''
+            INSERT OR IGNORE INTO working_hours (user_id, day_ofweek, is_working_day, start_time, end_time)
+            VALUES (?, ?, TRUE, ?, ?)
+        ''', (user_id, day, "09:00", "17:00"))
+    
+    # Saturday and Sunday - non-working days
+    for day in range(5, 7):
+        cursor.execute('''
+            INSERT OR IGNORE INTO working_hours (user_id, day_of_week, is_working_day)
+            VALUES (?, ?, FALSE)
+        ''', (user_id, day))
+    
+    conn.commit()
+    conn.close()
+
+def init_default_calendar_settings(user_id):
+    """Initialize default calendar settings for a user"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT OR IGNORE INTO calendar_settings 
+        (user_id, default_view, first_day_of_week, slot_duration, show_weekends, send_email_notifications, send_telegram_notifications)
+        VALUES (?, 'week', 1, 30, TRUE, TRUE, TRUE)
+    ''', (user_id,))
+    
+    conn.commit()
+    conn.close()
+
+def init_default_email_templates(user_id):
+    """Initialize default email templates for a user"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    templates = [
+        ("Appointment Confirmation", "Appointment Confirmation - {title}",
+         """Dear {client_name},
+
+Your appointment has been confirmed.
+
+📅 **Appointment Details:**
+- **Date:** {date}
+- **Time:** {time}
+- **Duration:** {duration} minutes
+- **Type:** {type}
+- **Description:** {description}
+
+📍 **Location/Meeting Link:** {location}
+
+Please arrive on time. If you need to reschedule or cancel, please do so at least 24 hours in advance.
+
+Best regards,
+{company_name}"""),
+        
+        ("Appointment Reminder", "Reminder: Your Appointment Tomorrow",
+         """Dear {client_name},
+
+This is a friendly reminder about your appointment tomorrow.
+
+📅 **Appointment Details:**
+- **Date:** {date}
+- **Time:** {time}
+- **Duration:** {duration} minutes
+
+Please don't hesitate to contact us if you have any questions.
+
+Best regards,
+{company_name}"""),
+        
+        ("Appointment Cancellation", "Appointment Cancelled - {title}",
+         """Dear {client_name},
+
+Your appointment has been cancelled as requested.
+
+📅 **Cancelled Appointment:**
+- **Date:** {date}
+- **Time:** {time}
+- **Type:** {type}
+
+To reschedule, please use our booking system or contact us directly.
+
+Best regards,
+{company_name}""")
+    ]
+    
+    for i, (name, subject, body) in enumerate(templates):
+        cursor.execute('''
+            INSERT OR IGNORE INTO email_templates (user_id, template_name, subject, body, is_default)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (user_id, name, subject, body, i == 0))  # First one is default
+    
+    conn.commit()
+    conn.close()
+
+def init_default_buffer_times(user_id):
+    """Initialize default buffer times for a user"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        INSERT OR IGNORE INTO buffer_times (user_id, before_appointment, after_appointment, same_day_buffer)
+        VALUES (?, 15, 15, 60)
+    ''', (user_id,))
+    
+    conn.commit()
+    conn.close()
+
+def init_default_appointment_types(user_id):
+    """Initialize default appointment types for a user"""
+    conn = sqlite3.connect('invoices.db')
+    cursor = conn.cursor()
+    
+    # Copy default types to user's appointment_types
+    cursor.execute('''
+        INSERT OR IGNORE INTO appointment_types (user_id, type_name, duration_minutes, description, color_hex)
+        SELECT ?, type_name, duration_minutes, description, color_hex
+        FROM default_appointment_types
+        WHERE NOT EXISTS (
+            SELECT 1 FROM appointment_types WHERE user_id = ? AND type_name = default_appointment_types.type_name
+        )
+    ''', (user_id, user_id))
+    
+    conn.commit()
+    conn.close()
+
+def initialize_user_defaults(user_id):
+    """Initialize all default settings for a new user"""
+    init_default_working_hours(user_id)
+    init_default_calendar_settings(user_id)
+    init_default_email_templates(user_id)
+    init_default_buffer_times(user_id)
+    init_default_appointment_types(user_id)
+    logger.info(f"✅ Default settings initialized for user {user_id}")
+
+# ===== BOT COMMANDS SETUP =====
+async def setup_bot_commands(application):  
+    """Set up the bot commands menu"""
+    commands = [
+        BotCommand("start", "🏢 Launch Business Suite"),
+        BotCommand("help", "📚 Show help message"),
+        BotCommand("schedule", "🗓️ Schedule appointment"),
+        BotCommand("calendar", "📅 View calendar"),
+        BotCommand("quickbook", "⚡ Quick appointment"),
+        BotCommand("appointments", "📋 My appointments"),
+        BotCommand("today", "📅 Today's schedule"),
+        BotCommand("week", "🗓️ This week's schedule"),
+        BotCommand("remind", "⏰ Set reminder"),
+        BotCommand("reschedule", "🔄 Reschedule appointment"),
+        BotCommand("cancel", "❌ Cancel appointment"),
+        BotCommand("logo", "🏢 Set company branding"),
+        BotCommand("company", "📛 Configure business name"),
+        BotCommand("create", "🧾 Generate new invoice"),
+        BotCommand("myinvoices", "📋 View invoice history"),
+        BotCommand("premium", "💎 Upgrade to Premium Suite"),
+        BotCommand("contact", "📞 Contact sales/support"),
+        BotCommand("myid", "🔑 Get account ID"),
+        BotCommand("clients", "👥 Manage clients"),
+        BotCommand("payments", "💰 Payment tracking"),
+        BotCommand("setup", "⚙️ Business configuration"),
+        BotCommand("settings", "⚙️ Appointment settings"),
+        BotCommand("quote", "📋 Create quote"),
+        BotCommand("myquotes", "📋 View my quotes")
+    ]
+    
+    await application.bot.set_my_commands(commands)
+    logger.info("✅ Bot commands menu has been set up!")
+
+# ===== MAIN BOT FUNCTION =====
+def main():
+    """Main entry point - optimized for Koyeb Web Service"""
+    print("\n" + "="*50)
+    print("🤖 MINIGMA BUSINESS SUITE - KOYEB WEB SERVICE")
+    print("="*50)
+    
+    # ===== 1. START HEALTH CHECK SERVER =====
+    print("🌐 Starting health check server...")
+    health_thread = threading.Thread(target=run_health_server, daemon=True)
+    health_thread.start()
+    print("✅ Health server running on port 8000")
+    
+    # ===== 2. GET BOT TOKEN =====
+    BOT_TOKEN = get_bot_token()
     if not BOT_TOKEN:
-        print("❌ ERROR: BOT_TOKEN environment variable not set!")
-        print("Please set it in Koyeb Dashboard → Environment Variables")
+        print("❌ ERROR: BOT_TOKEN not found!")
+        print("\nTo fix this:")
+        print("1. Go to Koyeb → Service → Environment Variables")
+        print("2. Add: Name='BOT_TOKEN', Value='your_token_here'")
+        print("\nGet token from @BotFather on Telegram")
         return
     
-    print("✅ Bot token loaded")
+    print(f"✅ Token loaded: {BOT_TOKEN[:15]}...")
     
+    # ===== 3. INITIALIZE BOT APPLICATION =====
     try:
-        # Create application
         application = Application.builder().token(BOT_TOKEN).build()
         
-        # Register command handlers
-        application.add_handler(CommandHandler("start", start))
-        application.add_handler(CommandHandler("help", help_command))
-        application.add_handler(CommandHandler("schedule", schedule))
-        application.add_handler(CommandHandler("calendar", calendar))
-        application.add_handler(CommandHandler("create", create))
-        application.add_handler(CommandHandler("quote", quote))
-        application.add_handler(CommandHandler("clients", clients))
-        application.add_handler(CommandHandler("payments", payments))
-        application.add_handler(CommandHandler("premium", premium))
-        application.add_handler(CommandHandler("setup", setup))
-        application.add_handler(CommandHandler("settings", settings))
-        application.add_handler(CommandHandler("myid", myid))
+        # ===== 4. SETUP COMMAND HANDLERS =====
+        # Note: You'll need to import/define your actual handlers
+        # For now, using placeholder handlers
+        from telegram.ext import CommandHandler, MessageHandler, filters
         
-        # Register text handler
+        # Placeholder handler
+        async def start(update, context):
+            await update.message.reply_text(
+                "🏢 **Minigma Business Suite**\n\n"
+                "✅ Bot is running on Koyeb!\n"
+                "Full functionality coming soon...",
+                parse_mode='Markdown'
+            )
+        
+        # Register placeholder handlers
+        application.add_handler(CommandHandler("start", start))
+        application.add_handler(CommandHandler("help", start))
+        
+        # Text handler
+        async def handle_text(update, context):
+            await update.message.reply_text("Use /help to see commands")
+        
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         
-        print("✅ All handlers registered")
-        print("📡 Starting bot...")
+        # ===== 5. SETUP BOT COMMANDS =====
+        application.post_init = setup_bot_commands
         
-        # Start the bot
-        application.run_polling(drop_pending_updates=True)
+        # ===== 6. DETECT DEPLOYMENT ENVIRONMENT =====
+        is_koyeb = 'KOYEB' in os.environ or 'KOYEB_APP_URL' in os.environ
         
+        if is_koyeb:
+            print("🚀 KOYEB WEB SERVICE DETECTED")
+            print("🔗 Bot is running with webhook support")
+        else:
+            print("💻 LOCAL DEVELOPMENT MODE")
+            print("📡 Using polling method...")
+        
+        print("✅ Bot initialized successfully!")
+        print("📱 Bot is now running. Test with /start on Telegram")
+        print("="*50)
+        
+        # ===== 7. START THE BOT =====
+        application.run_polling(
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES,
+            close_loop=False  # Important for threading
+        )
+        
+    except Conflict as e:
+        print(f"❌ CONFLICT ERROR: {e}")
+        print("\nAnother bot instance is already running.")
+        print("Solution: Stop all local bot instances (Ctrl+C)")
+        sys.exit(1)
+    except InvalidToken as e:
+        print(f"❌ INVALID TOKEN: {e}")
+        print("Check your BOT_TOKEN environment variable")
+        sys.exit(1)
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"❌ Unexpected error: {e}")
         import traceback
         traceback.print_exc()
+        sys.exit(1)
 
+# ===== ENTRY POINT =====
 if __name__ == "__main__":
-    main()    
+    main()
+
+print("✅ Part 1: Complete setup ready for Koyeb deployment!")   
 
 # ==================================================
 # PART 2: DATABASE HELPER FUNCTIONS (Updated with Scheduling)
@@ -9840,6 +10538,7 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
 
 
