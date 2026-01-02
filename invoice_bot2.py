@@ -1,27 +1,15 @@
 #!/usr/bin/env python3
-# ==================================================
-# MINIGMA BUSINESS SUITE - KOYEB WEB SERVICE VERSION
-# ==================================================
+"""
+Minigma Business Suite - Telegram Bot
+Simplified version for Koyeb deployment
+"""
 
 import os
 import logging
-import asyncio
-from datetime import datetime
-from http.server import HTTPServer, BaseHTTPRequestHandler
-import threading
-
-# Telegram imports
 from telegram import Update, BotCommand
-from telegram.ext import (
-    Application,
-    CommandHandler,
-    MessageHandler,
-    CallbackQueryHandler,
-    ContextTypes,
-    filters
-)
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-# Configure logging
+# Setup logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
@@ -29,209 +17,120 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ===== STUB COMMAND HANDLERS =====
-# (Keep all your stub handlers from previous version)
-# [All the stub handlers remain the same...]
-
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Handle /start command"""
-    welcome_msg = """
-🏢 **Minigma Business Suite**
+    await update.message.reply_text(
+        "🏢 **Minigma Business Suite**\n\n"
+        "Your business management assistant!\n\n"
+        "Use /help to see all commands.",
+        parse_mode='Markdown'
+    )
 
-Your all-in-one business management solution!
-
-📋 **Available Commands:**
-• /help - Show all commands
-• /schedule - Book appointments  
-• /calendar - View calendar
-• /create - Create invoices
-• /clients - Manage clients
-• /payments - Track payments
-• /premium - Upgrade features
-• /setup - Business configuration
-
-🚀 **Status:** ✅ Bot is running on Koyeb Web Service
-📞 **Support:** Contact administrator
-    """
-    await update.message.reply_text(welcome_msg, parse_mode='Markdown')
-
-# ===== WEBHOOK HEALTH CHECK =====
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        """Handle health check requests from Koyeb"""
-        if self.path == '/':
-            self.send_response(200)
-            self.send_header('Content-type', 'application/json')
-            self.end_headers()
-            response = {
-                'status': 'healthy',
-                'service': 'minigma-telegram-bot',
-                'timestamp': datetime.now().isoformat(),
-                'environment': 'koyeb-web-service'
-            }
-            self.wfile.write(json.dumps(response).encode())
-        elif self.path == '/webhook':
-            self.send_response(200)
-            self.send_header('Content-type', 'text/plain')
-            self.end_headers()
-            self.wfile.write(b'✅ Webhook endpoint is active')
-        else:
-            self.send_response(404)
-            self.end_headers()
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle /help command"""
+    commands = [
+        "/start - Start bot",
+        "/help - This help message",
+        "/schedule - Schedule appointment",
+        "/calendar - View calendar",
+        "/create - Create invoice",
+        "/quote - Create quote",
+        "/clients - Manage clients",
+        "/payments - Track payments",
+        "/premium - Upgrade features",
+        "/setup - Business setup",
+        "/settings - Appointment settings",
+        "/myid - Get your user ID"
+    ]
     
-    def log_message(self, format, *args):
-        pass  # Suppress HTTP access logs
+    await update.message.reply_text(
+        "📚 **Available Commands:**\n\n" + "\n".join(commands),
+        parse_mode='Markdown'
+    )
 
-def run_health_server():
-    """Run HTTP server for Koyeb health checks"""
-    try:
-        port = int(os.environ.get('PORT', 8000))
-        server = HTTPServer(('0.0.0.0', port), HealthHandler)
-        logger.info(f"🌐 Health server started on port {port}")
-        server.serve_forever()
-    except Exception as e:
-        logger.error(f"Health server error: {e}")
+async def schedule(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📅 Appointment scheduling feature")
 
-# ===== WEBHOOK SETUP FOR KOYEB =====
-async def setup_webhook(application, koyeb_app_url, bot_token):
-    """Set up webhook for Koyeb deployment"""
-    webhook_url = f"{koyeb_app_url}/webhook/{bot_token}"
-    
-    try:
-        await application.bot.set_webhook(
-            url=webhook_url,
-            drop_pending_updates=True
-        )
-        logger.info(f"✅ Webhook set to: {webhook_url}")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Webhook setup failed: {e}")
-        return False
+async def calendar(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🗓️ Calendar view feature")
 
-# ===== KOYEB WEB SERVICE MAIN FUNCTION =====
+async def create(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🧾 Invoice creation feature")
+
+async def quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("📋 Quote creation feature")
+
+async def clients(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👥 Client management feature")
+
+async def payments(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("💰 Payment tracking feature")
+
+async def premium(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("💎 Premium features")
+
+async def setup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⚙️ Business setup")
+
+async def settings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("⚙️ Appointment settings")
+
+async def myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    await update.message.reply_text(f"🔑 Your User ID: `{user_id}`", parse_mode='Markdown')
+
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle all text messages"""
+    await update.message.reply_text("Use /help to see available commands")
+
+# ===== MAIN FUNCTION =====
 def main():
-    """Main entry point optimized for Koyeb Web Service"""
-    print("\n" + "="*50)
-    print("🤖 MINIGMA BUSINESS SUITE - KOYEB WEB SERVICE")
-    print("="*50)
+    """Start the bot"""
+    print("🤖 Starting Minigma Business Suite Bot...")
     
-    # Get configuration
+    # Get token from environment variable
     BOT_TOKEN = os.getenv('BOT_TOKEN')
     if not BOT_TOKEN:
-        print("❌ ERROR: BOT_TOKEN environment variable is required!")
+        print("❌ ERROR: BOT_TOKEN environment variable not set!")
         print("Please set it in Koyeb Dashboard → Environment Variables")
         return
     
-    KOYEB_APP_URL = os.getenv('KOYEB_APP_URL', '')
-    PORT = int(os.getenv('PORT', 8000))
+    print("✅ Bot token loaded")
     
-    print(f"✅ Bot token loaded")
-    print(f"🌐 App URL: {KOYEB_APP_URL or 'Not set (using polling)'}")
-    print(f"🚪 Port: {PORT}")
-    
-    # Initialize application
     try:
+        # Create application
         application = Application.builder().token(BOT_TOKEN).build()
         
-        # ===== REGISTER ALL COMMAND HANDLERS =====
-        print("🔧 Registering all command handlers...")
-        
-        # Register all your handlers (same as before)
-        application.add_handler(CommandHandler("start", start_command))
+        # Register command handlers
+        application.add_handler(CommandHandler("start", start))
         application.add_handler(CommandHandler("help", help_command))
-        # ... [register all other handlers]
-        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text_input))
-        application.add_handler(CallbackQueryHandler(handle_button_callback))
+        application.add_handler(CommandHandler("schedule", schedule))
+        application.add_handler(CommandHandler("calendar", calendar))
+        application.add_handler(CommandHandler("create", create))
+        application.add_handler(CommandHandler("quote", quote))
+        application.add_handler(CommandHandler("clients", clients))
+        application.add_handler(CommandHandler("payments", payments))
+        application.add_handler(CommandHandler("premium", premium))
+        application.add_handler(CommandHandler("setup", setup))
+        application.add_handler(CommandHandler("settings", settings))
+        application.add_handler(CommandHandler("myid", myid))
+        
+        # Register text handler
+        application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
         
         print("✅ All handlers registered")
+        print("📡 Starting bot...")
         
-        # ===== DEPLOYMENT STRATEGY =====
-        is_koyeb = 'KOYEB' in os.environ or 'KOYEB_APP_URL' in os.environ
+        # Start the bot
+        application.run_polling(drop_pending_updates=True)
         
-        if is_koyeb and KOYEB_APP_URL:
-            print("🚀 KOYEB WEB SERVICE DETECTED")
-            print("🔗 Setting up webhook...")
-            
-            # Start health server in background thread
-            health_thread = threading.Thread(target=run_health_server, daemon=True)
-            health_thread.start()
-            
-            # Import aiohttp for webhook server
-            import aiohttp.web
-            
-            # Create web application for webhook
-            app = aiohttp.web.Application()
-            
-            async def handle_webhook(request):
-                """Handle incoming webhook updates"""
-                try:
-                    data = await request.json()
-                    update = Update.de_json(data, application.bot)
-                    await application.update_queue.put(update)
-                    return aiohttp.web.Response(text='OK')
-                except Exception as e:
-                    logger.error(f"Webhook error: {e}")
-                    return aiohttp.web.Response(text='ERROR', status=500)
-            
-            # Setup webhook route
-            app.router.add_post(f'/webhook/{BOT_TOKEN}', handle_webhook)
-            
-            # Setup health check route
-            async def handle_health(request):
-                return aiohttp.web.json_response({
-                    'status': 'healthy',
-                    'service': 'minigma-bot',
-                    'timestamp': datetime.now().isoformat()
-                })
-            
-            app.router.add_get('/', handle_health)
-            
-            # Start the bot
-            async def start_bot():
-                await application.initialize()
-                await setup_webhook(application, KOYEB_APP_URL, BOT_TOKEN)
-                await application.start()
-                print("✅ Bot started successfully!")
-                
-                # Keep the bot running
-                while True:
-                    await asyncio.sleep(3600)  # Sleep for 1 hour
-            
-            # Run everything
-            async def main_async():
-                # Start the bot in background
-                bot_task = asyncio.create_task(start_bot())
-                
-                # Start the web server
-                runner = aiohttp.web.AppRunner(app)
-                await runner.setup()
-                site = aiohttp.web.TCPSite(runner, '0.0.0.0', PORT)
-                await site.start()
-                print(f"✅ Web server started on port {PORT}")
-                
-                # Wait for bot to complete
-                await bot_task
-            
-            # Run the async main function
-            asyncio.run(main_async())
-            
-        else:
-            print("💻 LOCAL DEVELOPMENT MODE")
-            print("📡 Using polling method...")
-            
-            # Local development with polling
-            application.run_polling(
-                drop_pending_updates=True,
-                allowed_updates=Update.ALL_TYPES
-            )
-            
     except Exception as e:
-        logger.error(f"Fatal error: {e}")
+        print(f"❌ Error: {e}")
         import traceback
         traceback.print_exc()
 
-# ===== ENTRY POINT =====
 if __name__ == "__main__":
-    main()
+    main()    
 
 # ==================================================
 # PART 2: DATABASE HELPER FUNCTIONS (Updated with Scheduling)
@@ -9940,6 +9839,7 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
 
 
