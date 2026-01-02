@@ -4,6 +4,7 @@ Minigma Business Suite - Telegram Bot
 Simplified version for Koyeb deployment
 """
 
+from datetime import datetime, timedelta, date
 import os
 import logging
 from telegram import Update, BotCommand
@@ -9839,6 +9840,7 @@ if __name__ == "__main__":
         main()
 
 # NOTHING AFTER THIS LINE
+
 
 
 
